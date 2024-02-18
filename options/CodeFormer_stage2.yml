@@ -1,7 +1,7 @@
 # general settings
 name: CodeFormer_stage2
 model_type: CodeFormerIdxModel
-num_gpu: 8
+num_gpu: 1
 manual_seed: 0
 
 # dataset and data loader settings
@@ -9,11 +9,12 @@ datasets:
   train:
     name: FFHQ
     type: FFHQBlindDataset
-    dataroot_gt: datasets/ffhq/ffhq_512
+    dataroot_gt: /data/ffhq512_7w/
     filename_tmpl: '{}'
     io_backend:
       type: disk
-
+    
+    init_quality_path: ffhq512_all7w_musiq_gfiqa.csv
     in_size: 512
     gt_size: 512
     mean: [0.5, 0.5, 0.5]
@@ -61,8 +62,8 @@ network_g:
   codebook_size: 1024
   connect_list: ['32', '64', '128', '256']
   fix_modules: ['quantize','generator']
-  vqgan_path: './experiments/pretrained_models/vqgan/vqgan_code1024.pth' # pretrained VQGAN 
-
+  vqgan_path: '/data/weight/codeformer_reward/CodeFormer/vqgan_code1024.pth' # pretrained VQGAN 
+  num_class: 10
 network_vqgan: # this config is needed if no pre-calculated latent
   type: VQAutoEncoder
   img_size: 512

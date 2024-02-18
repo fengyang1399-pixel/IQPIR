@@ -17,7 +17,7 @@ class CodeFormerIdxModel(SRModel):
         self.gt = data['gt'].to(self.device)
         self.input = data['in'].to(self.device)
         self.b = self.gt.shape[0]
-
+        self.aesthetic_score=data['aesthetic_score']
         if 'latent_gt' in data:
             self.idx_gt = data['latent_gt'].to(self.device)
             self.idx_gt = self.idx_gt.view(self.b, -1)
@@ -98,7 +98,7 @@ class CodeFormerIdxModel(SRModel):
             # quant_feats
             quant_feat_gt = self.net_g.module.quantize.get_codebook_feat(self.idx_gt, shape=[self.b,16,16,256])
 
-        logits, lq_feat = self.net_g(self.input, w=0, code_only=True)
+        logits, lq_feat = self.net_g(self.input,score=self.aesthetic_score, w=0, code_only=True)
 
         l_g_total = 0
         loss_dict = OrderedDict()
@@ -133,7 +133,7 @@ class CodeFormerIdxModel(SRModel):
                 logger = get_root_logger()
                 logger.warning('Do not have self.net_g_ema, use self.net_g.')
                 self.net_g.eval()
-                self.output, _, _ = self.net_g(self.input, w=0)
+                self.output, _, _ = self.net_g(self.input,self.aesthetic_score, w=0)
                 self.net_g.train()
 
 

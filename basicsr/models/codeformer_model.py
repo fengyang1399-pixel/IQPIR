@@ -18,7 +18,7 @@ class CodeFormerModel(SRModel):
         self.gt = data['gt'].to(self.device)
         self.input = data['in'].to(self.device)
         self.b = self.gt.shape[0]
-
+        self.aesthetic_score=data['aesthetic_score']
         if 'latent_gt' in data:
             self.idx_gt = data['latent_gt'].to(self.device)
             self.idx_gt = self.idx_gt.view(self.b, -1)
@@ -149,9 +149,9 @@ class CodeFormerModel(SRModel):
             self.idx_gt = min_encoding_indices.view(self.b, -1)
 
         if self.fidelity_weight > 0:
-            self.output, logits, lq_feat = self.net_g(self.input, w=self.fidelity_weight, detach_16=True)
+            self.output, logits, lq_feat = self.net_g(self.input,self.aesthetic_score, w=self.fidelity_weight, detach_16=True)
         else:
-            logits, lq_feat = self.net_g(self.input, w=0, code_only=True)
+            logits, lq_feat = self.net_g(self.input,self.aesthetic_score, w=0, code_only=True)
 
         if self.hq_feat_loss:
             # quant_feats

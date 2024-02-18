@@ -78,7 +78,7 @@ if __name__ == '__main__':
         normalize(img, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
         img = img.unsqueeze(0).to(device)
         with torch.no_grad():
-            output = vqgan(img,aesthetic_score=0.95)[0]
+            output = vqgan(img,aesthetic_score=0.85)[0]
             output = tensor2img(output, min_max=[-1,1])
             img = tensor2img(img, min_max=[-1,1])
             restored_img = np.concatenate([img, output], axis=1)

@@ -1,3 +1,4 @@
+import pdb
 import cv2
 import math
 import random
@@ -186,7 +187,7 @@ class FFHQBlindDataset(data.Dataset):
         # load gt image
         gt_path = self.paths[index]
         name = osp.basename(gt_path)
-        quality_score=self.init_quality_df.loc[name,'score']
+        quality_score=(self.init_quality_df.loc[name,'score']-min(self.init_quality_df['score']))/(max(self.init_quality_df['score'])-min(self.init_quality_df['score']))
         name=osp.basename(gt_path)[:-4]
         img_bytes = self.file_client.get(gt_path)
         img_gt = imfrombytes(img_bytes, float32=True)
@@ -237,6 +238,7 @@ class FFHQBlindDataset(data.Dataset):
             # jpeg
             if self.jpeg_range is not None:
                 jpeg_p = np.random.uniform(self.jpeg_range[0], self.jpeg_range[1])
+                #print(jpeg_p)
                 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_p]
                 _, encimg = cv2.imencode('.jpg', img_in * 255., encode_param)
                 img_in = np.float32(cv2.imdecode(encimg, 1)) / 255.

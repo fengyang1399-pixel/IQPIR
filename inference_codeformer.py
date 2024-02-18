@@ -11,7 +11,8 @@ from facelib.utils.face_restoration_helper import FaceRestoreHelper
 from facelib.utils.misc import is_gray
 
 from basicsr.utils.registry import ARCH_REGISTRY
-
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 pretrain_model_url = {
     'restoration': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth',
 }
@@ -136,10 +137,10 @@ if __name__ == '__main__':
                                             connect_list=['32', '64', '128', '256']).to(device)
     
     # ckpt_path = 'weights/CodeFormer/codeformer.pth'
-    ckpt_path = load_file_from_url(url=pretrain_model_url['restoration'], 
-                                    model_dir='weights/CodeFormer', progress=True, file_name=None)
+    ##ckpt_path = load_file_from_url(url=pretrain_model_url['restoration'], model_dir='weights/CodeFormer', progress=True, file_name=None)
+    ckpt_path = '/data/weight/codeformer_aesthetic/5_stage_score_injection/net_g_200000.pth'
     checkpoint = torch.load(ckpt_path)['params_ema']
-    net.load_state_dict(checkpoint)
+    net.load_state_dict(checkpoint,strict=True)
     net.eval()
 
     # ------------------ set up FaceRestoreHelper -------------------
@@ -202,7 +203,7 @@ if __name__ == '__main__':
 
             try:
                 with torch.no_grad():
-                    output = net(cropped_face_t, w=w, adain=True)[0]
+                    output = net(cropped_face_t,score=torch.tensor(0.71).cuda(), w=w, adain=True)[0]
                     restored_face = tensor2img(output, rgb2bgr=True, min_max=(-1, 1))
                 del output
                 torch.cuda.empty_cache()

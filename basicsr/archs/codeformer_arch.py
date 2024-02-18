@@ -162,7 +162,7 @@ class CodeFormer(VQAutoEncoder):
     def __init__(self, dim_embd=512, n_head=8, n_layers=9, 
                 codebook_size=1024, latent_size=256,
                 connect_list=['32', '64', '128', '256'],
-                fix_modules=['quantize','generator'], vqgan_path=None):
+                fix_modules=['quantize','generator'], vqgan_path=None,num_class=10):
         super(CodeFormer, self).__init__(512, 64, [1, 2, 2, 4, 4, 8], 'nearest',2, [16], codebook_size)
 
         if vqgan_path is not None:
@@ -181,6 +181,8 @@ class CodeFormer(VQAutoEncoder):
 
         self.position_emb = nn.Parameter(torch.zeros(latent_size, self.dim_embd))
         self.feat_emb = nn.Linear(256, self.dim_embd)
+
+        self.score_embed=nn.Embedding(num_class,16*16*256)
 
         # transformer
         self.ft_layers = nn.Sequential(*[TransformerSALayer(embed_dim=dim_embd, nhead=n_head, dim_mlp=self.dim_mlp, dropout=0.0) 
@@ -220,8 +222,10 @@ class CodeFormer(VQAutoEncoder):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
-    def forward(self, x, w=0, detach_16=True, code_only=False, adain=False):
+    def forward(self, x,score=None, w=0, detach_16=True, code_only=False, adain=False):
         # ################### Encoder #####################
+        assert score is not None
+        #pdb.set_trace()
         enc_feat_dict = {}
         out_list = [self.fuse_encoder_block[f_size] for f_size in self.connect_list]
         for i, block in enumerate(self.encoder.blocks):
@@ -230,6 +234,8 @@ class CodeFormer(VQAutoEncoder):
                 enc_feat_dict[str(x.shape[-1])] = x.clone()
 
         lq_feat = x
+        score_emb=self.score_embed((abs(score)*10).floor().to(torch.int32)).reshape(x.shape)
+        lq_feat+=score_emb
         # ################# Transformer ###################
         # quant_feat, codebook_loss, quant_stats = self.quantize(lq_feat)
         pos_emb = self.position_emb.unsqueeze(1).repeat(1,x.shape[0],1)
