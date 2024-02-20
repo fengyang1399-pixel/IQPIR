@@ -349,15 +349,19 @@ class VQAutoEncoder(nn.Module):
             self.attn_resolutions
         )
         if self.quantizer_type == "nearest":
+            print('===================== nearest ======================')
             self.beta = beta #0.25
             self.quantize = VectorQuantizer(self.codebook_size, self.embed_dim, self.beta)
         elif self.quantizer_type == 'dual_codebook':
+            print('===================== dual_codebook ======================')
+            #assert aesthetic_threshold is not None and aesthetic_weight is not None
             self.beta = beta #0.25
             self.quantize = VectorQuantizer(self.codebook_size, self.embed_dim, self.beta)
             self.aesthetic_weight=aesthetic_weight
             self.aesthetic_threshold=aesthetic_threshold
             self.quantize_aesthetic = VectorQuantizer(self.codebook_size, self.embed_dim, self.beta)
         elif self.quantizer_type == "gumbel":
+            print('===================== gumbel ======================')
             self.gumbel_num_hiddens = emb_dim
             self.straight_through = gumbel_straight_through
             self.kl_weight = gumbel_kl_weight

@@ -40,6 +40,7 @@ class FFHQBlindDataset(data.Dataset):
 
         self.component_path = opt.get('component_path', None)
         self.latent_gt_path = opt.get('latent_gt_path', None)
+        self.latent_gt_path_aesthetic = opt.get('latent_gt_path_aesthetic', None)
 
         if self.component_path is not None:
             self.crop_components = True
@@ -56,6 +57,11 @@ class FFHQBlindDataset(data.Dataset):
         else:
             self.load_latent_gt = False  
 
+        if self.latent_gt_path_aesthetic is not None:
+            self.load_latent_gt_aesthetic = True            
+            self.latent_gt_dict_aesthetic = torch.load(self.latent_gt_path_aesthetic)
+        else:
+            self.load_latent_gt_aesthetic = False  
         if self.io_backend_opt['type'] == 'lmdb':
             self.io_backend_opt['db_paths'] = self.gt_folder
             if not self.gt_folder.endswith('.lmdb'):
@@ -187,7 +193,7 @@ class FFHQBlindDataset(data.Dataset):
         # load gt image
         gt_path = self.paths[index]
         name = osp.basename(gt_path)
-        quality_score=(self.init_quality_df.loc[name,'score']-min(self.init_quality_df['score']))/(max(self.init_quality_df['score'])-min(self.init_quality_df['score']))
+        quality_score=(self.init_quality_df.loc[name,'score']-min(self.init_quality_df['score']))/(0.001+max(self.init_quality_df['score'])-min(self.init_quality_df['score']))
         name=osp.basename(gt_path)[:-4]
         img_bytes = self.file_client.get(gt_path)
         img_gt = imfrombytes(img_bytes, float32=True)
@@ -201,6 +207,11 @@ class FFHQBlindDataset(data.Dataset):
             else:
                 latent_gt = self.latent_gt_dict['orig'][name]
 
+        if self.load_latent_gt_aesthetic:
+            if status[0]:
+                latent_gt_aesthetic = self.latent_gt_dict_aesthetic['hflip'][name]
+            else:
+                latent_gt_aesthetic = self.latent_gt_dict_aesthetic['orig'][name]
         if self.crop_components:
             locations_gt, locations_in = self.get_component_locations(name, status)
 
@@ -295,6 +306,7 @@ class FFHQBlindDataset(data.Dataset):
 
         if self.load_latent_gt:
             return_dict['latent_gt'] = latent_gt
+            return_dict['latent_gt_aesthetic'] = latent_gt_aesthetic
 
         # if self.gen_inpaint_mask:
         #     return_dict['inpaint_mask'] = inpaint_mask

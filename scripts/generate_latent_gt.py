@@ -1,5 +1,6 @@
 import argparse
 import glob
+import pdb
 import numpy as np
 import os
 import cv2
@@ -12,7 +13,7 @@ from basicsr.utils.registry import ARCH_REGISTRY
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--test_path', type=str, default='datasets/ffhq/ffhq_512')
-    parser.add_argument('-o', '--save_root', type=str, default='./experiments/pretrained_models/vqgan')
+    parser.add_argument('-o', '--save_root', type=str, default='./weights/CodeFormer_aesthetic')
     parser.add_argument('--codebook_size', type=int, default=1024)
     parser.add_argument('--ckpt_path', type=str, default='./experiments/pretrained_models/vqgan/net_g.pth')
     args = parser.parse_args()
@@ -28,10 +29,10 @@ if __name__ == '__main__':
     ckpt_path = args.ckpt_path
     codebook_size = args.codebook_size
 
-    vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'nearest',
+    vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'dual_codebook',
                                                 codebook_size=codebook_size).to(device)
     checkpoint = torch.load(ckpt_path)['params_ema']
-
+    pdb.set_trace()     
     vqgan.load_state_dict(checkpoint)
     vqgan.eval()
 
@@ -40,8 +41,9 @@ if __name__ == '__main__':
     latent = {}
     latent['orig'] = {}
     latent['hflip'] = {}
-    for i in ['orig', 'hflip']:
-    # for i in ['hflip']:
+    
+    #for i in ['orig', 'hflip']:
+    for i in ['hflip']:
         for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g'))):
             img_name = os.path.basename(img_path)
             img = cv2.imread(img_path)
@@ -52,8 +54,9 @@ if __name__ == '__main__':
             img = img.unsqueeze(0).to(device)
             with torch.no_grad():
                 # output = net(img)[0]
-                x, feat_dict = vqgan.encoder(img, True)
+                x = vqgan.encoder(img)
                 x, _, log = vqgan.quantize(x)
+                #x, _, log = vqgan.quantize_aesthetic(x)
             # del output
             torch.cuda.empty_cache()
 
@@ -62,6 +65,6 @@ if __name__ == '__main__':
             latent[i][img_name[:-4]] = min_encoding_indices.cpu().numpy()
             print(img_name, latent[i][img_name[:-4]].shape)
 
-    latent_save_path = os.path.join(save_root, f'latent_gt_code{codebook_size}.pth')
+    latent_save_path = os.path.join(save_root, f'150w_common_latent_gt_code{codebook_size}.pth')
     torch.save(latent, latent_save_path)
     print(f'\nLatent GT code are saved in {save_root}')

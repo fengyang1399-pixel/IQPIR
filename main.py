@@ -28,7 +28,7 @@ args, unkown_args = parser.parse_known_args()
 print('[Main.py] args: ', args)
 
 if args.region == 'cn-south':
-    CODE_PATH = 's3://bucket-1658/hupeng/code/codeformer_reward/'
+    CODE_PATH = 's3://bucket-1658/hupeng/code/CodeFormer_aesthetic/'
     EXP_PATH = 's3://bucket-1658/hupeng/exp/'
     DATA_PATH = 's3://bucket-1658/hupeng/data/'
     cache_path='s3://bucket-1658/hupeng/.cache/'

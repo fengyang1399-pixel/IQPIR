@@ -162,8 +162,8 @@ class CodeFormer(VQAutoEncoder):
     def __init__(self, dim_embd=512, n_head=8, n_layers=9, 
                 codebook_size=1024, latent_size=256,
                 connect_list=['32', '64', '128', '256'],
-                fix_modules=['quantize','generator'], vqgan_path=None,num_class=10):
-        super(CodeFormer, self).__init__(512, 64, [1, 2, 2, 4, 4, 8], 'nearest',2, [16], codebook_size)
+                fix_modules=['quantize','generator'], vqgan_path=None,num_class=10,quantizer_type='nearest',aesthetic_weight=1.0):
+        super(CodeFormer, self).__init__(512, 64, [1, 2, 2, 4, 4, 8], quantizer_type,2, [16], codebook_size,aesthetic_weight=aesthetic_weight)
 
         if vqgan_path is not None:
             self.load_state_dict(
@@ -189,6 +189,8 @@ class CodeFormer(VQAutoEncoder):
                                     for _ in range(self.n_layers)])
 
         # logits_predict head
+        if quantizer_type=='dual_codebook':
+            codebook_size*=2
         self.idx_pred_layer = nn.Sequential(
             nn.LayerNorm(dim_embd),
             nn.Linear(dim_embd, codebook_size, bias=False))
@@ -247,8 +249,14 @@ class CodeFormer(VQAutoEncoder):
             query_emb = layer(query_emb, query_pos=pos_emb)
 
         # output logits
+        #pdb.set_trace()
         logits = self.idx_pred_layer(query_emb) # (hw)bn
-        logits = logits.permute(1,0,2) # (hw)bn -> b(hw)n
+
+        if(self.quantizer_type=='dual_codebook'):
+            logits=logits.reshape([logits.shape[0],logits.shape[1],-1,2])
+            logits = logits.permute(1,0,2,3) # (hw)bn2 -> b(hw)n2 #n为每个codebook的大小，2表示两个codebook
+        else:
+            logits = logits.permute(1,0,2) # (hw)bn -> b(hw)n
 
         if code_only: # for training stage II
           # logits doesn't need softmax before cross_entropy loss
@@ -262,7 +270,12 @@ class CodeFormer(VQAutoEncoder):
         # ------------
         soft_one_hot = F.softmax(logits, dim=2)
         _, top_idx = torch.topk(soft_one_hot, 1, dim=2)
-        quant_feat = self.quantize.get_codebook_feat(top_idx, shape=[x.shape[0],16,16,256])
+
+        if self.quantizer_type=='dual_codebook':
+            quant_feat_aesthetic = self.quantize_aesthetic.get_codebook_feat(top_idx[:,:,:,0], shape=[x.shape[0],16,16,256])
+            quant_feat = self.aesthetic_weight*quant_feat_aesthetic+self.quantize.get_codebook_feat(top_idx[:,:,:,1], shape=[x.shape[0],16,16,256])
+        else:
+            quant_feat = self.quantize.get_codebook_feat(top_idx, shape=[x.shape[0],16,16,256])
         # preserve gradients
         # quant_feat = lq_feat + (quant_feat - lq_feat).detach()
 

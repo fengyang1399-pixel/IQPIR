@@ -60,9 +60,13 @@ if __name__ == '__main__':
 
     parser.add_argument('-i', '--input_path', type=str, default='./inputs/whole_imgs', 
             help='Input image, video or folder. Default: inputs/whole_imgs')
+    parser.add_argument('-qt', '--quantizer_type', type=str, default='nearest', 
+            help='quantizer_type')
     parser.add_argument('-o', '--output_path', type=str, default=None, 
             help='Output folder. Default: results/<input_name>_<w>')
     parser.add_argument('-w', '--fidelity_weight', type=float, default=0.5, 
+            help='Balance the quality and fidelity. Default: 0.5')
+    parser.add_argument('-aw', '--aesthetic_weight', type=float, default=0.5, 
             help='Balance the quality and fidelity. Default: 0.5')
     parser.add_argument('-s', '--upscale', type=int, default=2, 
             help='The final upsampling scale of the image. Default: 2')
@@ -133,12 +137,15 @@ if __name__ == '__main__':
         face_upsampler = None
 
     # ------------------ set up CodeFormer restorer -------------------
-    net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, 
+    net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, quantizer_type=args.quantizer_type,aesthetic_weight=args.aesthetic_weight,
                                             connect_list=['32', '64', '128', '256']).to(device)
     
     # ckpt_path = 'weights/CodeFormer/codeformer.pth'
     ##ckpt_path = load_file_from_url(url=pretrain_model_url['restoration'], model_dir='weights/CodeFormer', progress=True, file_name=None)
     ckpt_path = '/data/weight/codeformer_aesthetic/5_stage_score_injection/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/4_stage2_score_injection/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/6/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/7_dualcodebook_scoreinjection/net_g_200000.pth'
     checkpoint = torch.load(ckpt_path)['params_ema']
     net.load_state_dict(checkpoint,strict=True)
     net.eval()
@@ -203,7 +210,7 @@ if __name__ == '__main__':
 
             try:
                 with torch.no_grad():
-                    output = net(cropped_face_t,score=torch.tensor(0.71).cuda(), w=w, adain=True)[0]
+                    output = net(cropped_face_t,score=torch.tensor(0.91).cuda(), w=w, adain=True)[0]
                     restored_face = tensor2img(output, rgb2bgr=True, min_max=(-1, 1))
                 del output
                 torch.cuda.empty_cache()

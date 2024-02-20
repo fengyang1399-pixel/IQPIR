@@ -64,7 +64,7 @@ if __name__ == '__main__':
     codebook_size = args.codebook_size
 
     vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'dual_codebook',
-                                                codebook_size=codebook_size,aesthetic_threshold=0.9,aesthetic_weight=1.0).to(device)
+                                                codebook_size=codebook_size,aesthetic_threshold=0.8,aesthetic_weight=1.0).to(device)
     checkpoint = torch.load(ckpt_path)['params_ema']
 
     vqgan.load_state_dict(checkpoint)
