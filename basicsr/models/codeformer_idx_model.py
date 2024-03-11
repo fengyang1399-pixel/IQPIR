@@ -1,5 +1,5 @@
 import pdb
-import torch
+import torch,torchvision
 from collections import OrderedDict
 from os import path as osp
 from tqdm import tqdm
@@ -10,8 +10,10 @@ from basicsr.utils import get_root_logger, imwrite, tensor2img
 from basicsr.utils.registry import MODEL_REGISTRY
 import torch.nn.functional as F
 from .sr_model import SRModel
-
-
+from basicsr.IQA.musiq.load_model import model_init, inference
+import pyiqa
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 @MODEL_REGISTRY.register()
 class CodeFormerIdxModel(SRModel):
     def feed_data(self, data):
@@ -75,6 +77,21 @@ class CodeFormerIdxModel(SRModel):
         self.setup_schedulers()
 
 
+        self.quality_loss = train_opt.get('quality_loss', False)
+        self.quality_loss_weight = train_opt.get('quality_loss_weight', 0.2)
+        self.quality_model = model_init()
+        for name, param in self.quality_model[0].named_parameters():
+            param.requires_grad = False
+        for name, param in self.quality_model[1].named_parameters():
+            param.requires_grad = False
+
+        self.topiq_type = train_opt.get('topiq_type', None)
+        if self.topiq_type:
+            print(f"=========================topiq loss:{self.topiq_type}======================")
+            self.topiq_loss_weight = train_opt.get('topiq_loss_weight', 0.1)
+            self.topiq_iqa=pyiqa.create_metric(self.topiq_type, device='cuda', as_loss=True)
+        else:
+            self.topiq_iqa=None
     def setup_optimizers(self):
         train_opt = self.opt['train']
         # optimizer g
@@ -111,7 +128,7 @@ class CodeFormerIdxModel(SRModel):
                 quant_feat_gt2 = self.net_g.module.quantize_aesthetic.get_codebook_feat(self.idx_gt_aesthetic, shape=[self.b,16,16,256])
                 quant_feat_gt+=quant_feat_gt2*self.net_g.module.aesthetic_weight
         #pdb.set_trace()
-        logits, lq_feat = self.net_g(self.input,score=self.aesthetic_score, w=0, code_only=True)
+        output, logits, lq_feat = self.net_g(self.input,score=self.aesthetic_score, w=0, detach_16=False, code_only=False)
 
         l_g_total = 0
         loss_dict = OrderedDict()
@@ -133,6 +150,23 @@ class CodeFormerIdxModel(SRModel):
             cross_entropy_loss = F.cross_entropy(logits.permute(0, 2, 1), self.idx_gt) * self.entropy_loss_weight
             l_g_total += cross_entropy_loss
             loss_dict['cross_entropy_loss'] = cross_entropy_loss
+        # reward_loss-MUSIQ-GF20K
+        if self.quality_loss:
+            pdb.set_trace()
+            output = torch.clamp((output + 1.0) / 2.0, min=0.0, max=1.0)
+            if(output.shape[-1]!=512):
+                output=torchvision.transforms.Resize(size=512)(output)
+            quality = inference(self.quality_model[0], self.quality_model[1], output)
+            quality_loss = torch.nn.functional.relu(-quality.mean() + 1) * self.quality_loss_weight
+            l_g_total += quality_loss
+            loss_dict['quality_loss'] = quality_loss
+        pdb.set_trace()
+        if self.topiq_iqa:
+            topiq_score=self.topiq_iqa(output,align_crop_face=False)
+            topiq_loss=(1-topiq_score)*self.topiq_loss_weight
+            l_g_total += topiq_loss
+            loss_dict['topiq_loss'] = quality_loss
+
 
         l_g_total.backward()
         self.optimizer_g.step()

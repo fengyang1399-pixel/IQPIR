@@ -43,28 +43,34 @@ if __name__ == '__main__':
     latent['hflip'] = {}
     
     #for i in ['orig', 'hflip']:
-    for i in ['hflip']:
-        for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g'))):
-            img_name = os.path.basename(img_path)
-            img = cv2.imread(img_path)
-            if i == 'hflip':
-                cv2.flip(img, 1, img)
-            img = img2tensor(img / 255., bgr2rgb=True, float32=True)
-            normalize(img, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
-            img = img.unsqueeze(0).to(device)
-            with torch.no_grad():
-                # output = net(img)[0]
-                x = vqgan.encoder(img)
-                x, _, log = vqgan.quantize(x)
-                #x, _, log = vqgan.quantize_aesthetic(x)
-            # del output
-            torch.cuda.empty_cache()
+    #for i in ['hflip']:
+    name=[f'25_16w_common_latent_gt_code{codebook_size}.pth',f'25_16w_HQplus_latent_gt_code{codebook_size}.pth']
+    for k in range(2):
+        for i in ['orig', 'hflip']:
+        #for i in ['orig']:
+            for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g'))):
+                img_name = os.path.basename(img_path)
+                img = cv2.imread(img_path)
+                if i == 'hflip':
+                    cv2.flip(img, 1, img)
+                img = img2tensor(img / 255., bgr2rgb=True, float32=True)
+                normalize(img, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
+                img = img.unsqueeze(0).to(device)
+                with torch.no_grad():
+                    # output = net(img)[0]
+                    x = vqgan.encoder(img)
+                    if k==0:
+                        x, _, log = vqgan.quantize(x)
+                    elif k==1:
+                        x, _, log = vqgan.quantize_aesthetic(x)
+                # del output
+                torch.cuda.empty_cache()
 
-            min_encoding_indices = log['min_encoding_indices']
-            min_encoding_indices = min_encoding_indices.view(size_latent,size_latent)
-            latent[i][img_name[:-4]] = min_encoding_indices.cpu().numpy()
-            print(img_name, latent[i][img_name[:-4]].shape)
+                min_encoding_indices = log['min_encoding_indices']
+                min_encoding_indices = min_encoding_indices.view(size_latent,size_latent)
+                latent[i][img_name[:-4]] = min_encoding_indices.cpu().numpy()
+                print(img_name, latent[i][img_name[:-4]].shape)
 
-    latent_save_path = os.path.join(save_root, f'150w_common_latent_gt_code{codebook_size}.pth')
-    torch.save(latent, latent_save_path)
-    print(f'\nLatent GT code are saved in {save_root}')
+        latent_save_path = os.path.join(save_root, name[k])
+        torch.save(latent, latent_save_path)
+        print(f'\nLatent GT code are saved in {save_root}')

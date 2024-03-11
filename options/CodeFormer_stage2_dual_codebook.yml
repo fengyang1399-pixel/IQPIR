@@ -14,7 +14,8 @@ datasets:
     io_backend:
       type: disk
     
-    init_quality_path: ffhq512_all7w_musiq_gfiqa.csv
+    init_quality_path: all_scores.csv
+    normalize_quality: false
     in_size: 512
     gt_size: 512
     mean: [0.5, 0.5, 0.5]
@@ -34,8 +35,8 @@ datasets:
     jpeg_range: [30, 80]
 
     #latent_gt_path: ~ # without pre-calculated latent code
-    latent_gt_path: './weights/CodeFormer_aesthetic/common_latent_gt_code1024.pth'
-    latent_gt_path_aesthetic: './weights/CodeFormer_aesthetic/HQplus_latent_gt_code1024.pth'
+    latent_gt_path: './weights/CodeFormer_aesthetic/150w_common_latent_gt_code1024.pth'
+    latent_gt_path_aesthetic: './weights/CodeFormer_aesthetic/150w_HQplus_latent_gt_code1024.pth'
 
     # data loader
     num_worker_per_gpu: 2
@@ -63,8 +64,9 @@ network_g:
   codebook_size: 1024
   connect_list: ['32', '64', '128', '256']
   fix_modules: ['quantize','generator']
-  vqgan_path: '/data/weight/codeformer_aesthetic/1_0.75/net_g_150000.pth' # pretrained VQGAN 
+  vqgan_path: '/data/weight/codeformer_aesthetic/1_0.75/net_g_1500000.pth' # pretrained VQGAN 
   num_class: 10
+  bins_list: [20,20,20,20]
   quantizer_type: 'dual_codebook'
   aesthetic_weight: 1.0
 # network_vqgan: # this config is needed if no pre-calculated latent
@@ -91,6 +93,7 @@ train:
   cross_entropy_loss: true
   entropy_loss_weight: 0.5
   fidelity_weight: 0
+  quality_loss: true
 
   optim_g:
     type: Adam

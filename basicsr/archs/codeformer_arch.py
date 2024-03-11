@@ -162,7 +162,7 @@ class CodeFormer(VQAutoEncoder):
     def __init__(self, dim_embd=512, n_head=8, n_layers=9, 
                 codebook_size=1024, latent_size=256,
                 connect_list=['32', '64', '128', '256'],
-                fix_modules=['quantize','generator'], vqgan_path=None,num_class=10,quantizer_type='nearest',aesthetic_weight=1.0):
+                fix_modules=['quantize','generator'], vqgan_path=None,num_class=10,quantizer_type='nearest',aesthetic_weight=1.0,score_embedding=True,bins_list=None):
         super(CodeFormer, self).__init__(512, 64, [1, 2, 2, 4, 4, 8], quantizer_type,2, [16], codebook_size,aesthetic_weight=aesthetic_weight)
 
         if vqgan_path is not None:
@@ -181,8 +181,14 @@ class CodeFormer(VQAutoEncoder):
 
         self.position_emb = nn.Parameter(torch.zeros(latent_size, self.dim_embd))
         self.feat_emb = nn.Linear(256, self.dim_embd)
-
-        self.score_embed=nn.Embedding(num_class,16*16*256)
+        self.score_embedding=score_embedding
+        if self.score_embedding:
+            if bins_list is not None:
+                self.score_embed=nn.ModuleList()
+                for bins in bins_list:
+                    self.score_embed.append(nn.Embedding(bins,16*16*256))
+            else:
+                self.score_embed=nn.Embedding(num_class,16*16*256)
 
         # transformer
         self.ft_layers = nn.Sequential(*[TransformerSALayer(embed_dim=dim_embd, nhead=n_head, dim_mlp=self.dim_mlp, dropout=0.0) 
@@ -236,8 +242,17 @@ class CodeFormer(VQAutoEncoder):
                 enc_feat_dict[str(x.shape[-1])] = x.clone()
 
         lq_feat = x
-        score_emb=self.score_embed((abs(score)*10).floor().to(torch.int32)).reshape(x.shape)
-        lq_feat+=score_emb
+        if self.score_embedding:
+            if isinstance(self.score_embed,nn.ModuleList):
+                for i in range(len(self.score_embed)):
+                    score_emb_module=self.score_embed[i]
+                    s=(score[:,i]*20).floor().to(torch.int32)
+                    score_emb=score_emb_module(s).reshape(x.shape)
+                    lq_feat+=score_emb
+            else:
+                s=(score*10).floor().to(torch.int32)
+                score_emb=self.score_embed(s).reshape(x.shape)
+                lq_feat+=score_emb
         # ################# Transformer ###################
         # quant_feat, codebook_loss, quant_stats = self.quantize(lq_feat)
         pos_emb = self.position_emb.unsqueeze(1).repeat(1,x.shape[0],1)
@@ -277,7 +292,7 @@ class CodeFormer(VQAutoEncoder):
         else:
             quant_feat = self.quantize.get_codebook_feat(top_idx, shape=[x.shape[0],16,16,256])
         # preserve gradients
-        # quant_feat = lq_feat + (quant_feat - lq_feat).detach()
+        quant_feat = lq_feat + (quant_feat - lq_feat).detach()
 
         if detach_16:
             quant_feat = quant_feat.detach() # for training stage III

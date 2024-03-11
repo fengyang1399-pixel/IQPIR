@@ -63,14 +63,14 @@ if __name__ == '__main__':
     ckpt_path = args.ckpt_path
     codebook_size = args.codebook_size
 
-    vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'dual_codebook',
-                                                codebook_size=codebook_size,aesthetic_threshold=0.8,aesthetic_weight=1.0).to(device)
+    vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'nearest',
+                                                codebook_size=codebook_size,aesthetic_threshold=0.0,aesthetic_weight=1.0).to(device)
     checkpoint = torch.load(ckpt_path)['params_ema']
 
     vqgan.load_state_dict(checkpoint)
     vqgan.eval()
 
-    for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g')))[:100]:
+    for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g')))[:300]:
         img_name = os.path.basename(img_path)
         print(img_name)
         img = cv2.imread(img_path)

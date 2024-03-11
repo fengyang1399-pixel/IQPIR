@@ -2,6 +2,8 @@ import os
 import cv2
 import argparse
 import glob
+import numpy as np
+import pandas as pd
 import torch
 from torchvision.transforms.functional import normalize
 from basicsr.utils import imwrite, img2tensor, tensor2img
@@ -63,6 +65,8 @@ if __name__ == '__main__':
     parser.add_argument('-qt', '--quantizer_type', type=str, default='nearest', 
             help='quantizer_type')
     parser.add_argument('-o', '--output_path', type=str, default=None, 
+            help='Output folder. Default: results/<input_name>_<w>')
+    parser.add_argument('-ckpt', '--checkpoint', type=str, default=None, 
             help='Output folder. Default: results/<input_name>_<w>')
     parser.add_argument('-w', '--fidelity_weight', type=float, default=0.5, 
             help='Balance the quality and fidelity. Default: 0.5')
@@ -138,7 +142,7 @@ if __name__ == '__main__':
 
     # ------------------ set up CodeFormer restorer -------------------
     net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, quantizer_type=args.quantizer_type,aesthetic_weight=args.aesthetic_weight,
-                                            connect_list=['32', '64', '128', '256']).to(device)
+                                            connect_list=['32', '64', '128', '256'],score_embedding=True).to(device)
     
     # ckpt_path = 'weights/CodeFormer/codeformer.pth'
     ##ckpt_path = load_file_from_url(url=pretrain_model_url['restoration'], model_dir='weights/CodeFormer', progress=True, file_name=None)
@@ -146,6 +150,19 @@ if __name__ == '__main__':
     ckpt_path = '/data/weight/codeformer_aesthetic/4_stage2_score_injection/net_g_200000.pth'
     ckpt_path = '/data/weight/codeformer_aesthetic/6/net_g_200000.pth'
     ckpt_path = '/data/weight/codeformer_aesthetic/7_dualcodebook_scoreinjection/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/7_2/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/8/net_g_110000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/11/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/13/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/13/net_g_150000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/16/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/17/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/13_2/net_g_150000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/11_2/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/13_2/net_g_200000.pth'
+    ckpt_path = '/data/weight/codeformer_aesthetic/12/net_g_200000.pth'
+    ckpt_path = args.checkpoint
+    print(ckpt_path)
     checkpoint = torch.load(ckpt_path)['params_ema']
     net.load_state_dict(checkpoint,strict=True)
     net.eval()
@@ -202,6 +219,7 @@ if __name__ == '__main__':
             face_helper.align_warp_face()
 
         # face restoration for each cropped face
+        ffhq_score_list=np.array(pd.read_csv('ffhq512_all7w_musiq_gfiqa.csv')['score'])
         for idx, cropped_face in enumerate(face_helper.cropped_faces):
             # prepare data
             cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
@@ -210,7 +228,10 @@ if __name__ == '__main__':
 
             try:
                 with torch.no_grad():
-                    output = net(cropped_face_t,score=torch.tensor(0.91).cuda(), w=w, adain=True)[0]
+                    score_injection=(ffhq_score_list[np.random.randint(0,70000)]-min(ffhq_score_list))/(max(ffhq_score_list)-min(ffhq_score_list)+0.001)
+                    score_injection=0.85
+                    #score_injection=[[0.65,0.91,0.91,0.91]]
+                    output = net(cropped_face_t,score=torch.tensor(score_injection).cuda(), w=w, adain=True)[0]
                     restored_face = tensor2img(output, rgb2bgr=True, min_max=(-1, 1))
                 del output
                 torch.cuda.empty_cache()

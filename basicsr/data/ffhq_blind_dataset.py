@@ -27,9 +27,10 @@ class FFHQBlindDataset(data.Dataset):
         self.file_client = None
         self.io_backend_opt = opt['io_backend']
 
-        self.init_quality_df= pd.read_csv(opt['init_quality_path'])
-        self.init_quality_df.index=self.init_quality_df['imagename']
-
+        self.init_quality_df= pd.read_csv(opt['init_quality_path'],index_col='imagename')
+        #self.init_quality_df.index=self.init_quality_df['imagename']
+        #pdb.set_trace()
+        self.normalize_quality=opt.get('normalize_quality', True)
         self.gt_folder = opt['dataroot_gt']
         self.gt_size = opt.get('gt_size', 512)
         self.in_size = opt.get('in_size', 512)
@@ -193,7 +194,10 @@ class FFHQBlindDataset(data.Dataset):
         # load gt image
         gt_path = self.paths[index]
         name = osp.basename(gt_path)
-        quality_score=(self.init_quality_df.loc[name,'score']-min(self.init_quality_df['score']))/(0.001+max(self.init_quality_df['score'])-min(self.init_quality_df['score']))
+        if self.normalize_quality:
+            quality_score=(self.init_quality_df.loc[name,'score']-min(self.init_quality_df['score']))/(0.001+max(self.init_quality_df['score'])-min(self.init_quality_df['score']))
+        else:
+            quality_score=torch.tensor(self.init_quality_df.loc[name].tolist())
         name=osp.basename(gt_path)[:-4]
         img_bytes = self.file_client.get(gt_path)
         img_gt = imfrombytes(img_bytes, float32=True)

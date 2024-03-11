@@ -403,6 +403,7 @@ class VQAutoEncoder(nn.Module):
         if(self.quantizer_type == "None"):
             quant, codebook_loss, quant_stats = x,torch.tensor(0.0,device=x.device),None
         elif self.quantizer_type== 'dual_codebook':
+            #pdb.set_trace()
             assert aesthetic_score is not None
             quant, codebook_loss, quant_stats = self.quantize(x)
             #pdb.set_trace()
