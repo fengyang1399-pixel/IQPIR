@@ -16,7 +16,7 @@ from basicsr.utils import (MessageLogger, check_resume, get_env_info, get_root_l
                            init_wandb_logger, make_exp_dirs, mkdir_and_rename, set_random_seed)
 from basicsr.utils.dist_util import get_dist_info, init_dist
 from basicsr.utils.options import dict2str, parse
-
+import pdb
 import warnings
 # ignore UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`.
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -179,7 +179,7 @@ def train_pipeline(root_path):
             current_iter += 1
             if current_iter > total_iters:
                 break
-            # update learning rate
+            # # update learning rate
             model.update_learning_rate(current_iter, warmup_iter=opt['train'].get('warmup_iter', -1))
             # training
             model.feed_data(train_data)
@@ -192,7 +192,12 @@ def train_pipeline(root_path):
                 log_vars.update({'time': iter_time, 'data_time': data_time})
                 log_vars.update(model.get_current_log())
                 msg_logger(log_vars)
-
+            if torch.cuda.current_device()==0:
+                log_dic=model.get_current_log()
+                tb_logger.add_scalar("topiq_score",log_dic["topiq_score"],current_iter)
+                tb_logger.add_scalar("l_feat_encoder",log_dic["l_feat_encoder"],current_iter)
+                tb_logger.add_scalar("cross_entropy_loss",log_dic["cross_entropy_loss"],current_iter)
+            #pdb.set_trace()
             # save models and training states
             if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
                 logger.info('Saving models and training states.')

@@ -8,7 +8,7 @@ from basicsr.utils import imwrite, img2tensor, tensor2img
 from basicsr.utils.download_util import load_file_from_url
 from basicsr.utils.misc import get_device
 from basicsr.utils.registry import ARCH_REGISTRY
-
+import pdb
 pretrain_model_url = 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer_colorization.pth'
 
 if __name__ == '__main__':
@@ -20,6 +20,10 @@ if __name__ == '__main__':
                     help='Input image or folder. Default: inputs/gray_faces')
     parser.add_argument('-o', '--output_path', type=str, default=None, 
                     help='Output folder. Default: results/<input_name>')
+    parser.add_argument('-ckpt', '--ckpt_path', type=str, default=None, 
+                    help='')
+    parser.add_argument( '-score', type=float, default=None, 
+                    help='')
     parser.add_argument('--suffix', type=str, default=None, 
                     help='Suffix of the restored faces. Default: None')
     args = parser.parse_args()
@@ -42,12 +46,17 @@ if __name__ == '__main__':
     test_img_num = len(input_img_list)
 
     # ------------------ set up CodeFormer restorer -------------------
-    net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, 
-                                            connect_list=['32', '64', '128']).to(device)
-    
-    # ckpt_path = 'weights/CodeFormer/codeformer.pth'
-    ckpt_path = load_file_from_url(url=pretrain_model_url, 
-                                    model_dir='weights/CodeFormer', progress=True, file_name=None)
+    # net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, 
+    #                                         connect_list=['32', '64', '128']).to(device)
+    if args.score is None:
+        score_embedding=None
+    else:
+        score_embedding="add"
+    net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, quantizer_type="nearest",aesthetic_weight=0.8,
+                                            connect_list=['32', '64', '128', '256'],score_embedding=score_embedding).to(device)
+    ckpt_path =args.ckpt_path
+    #ckpt_path = load_file_from_url(url=pretrain_model_url, 
+    #                                model_dir='weights/CodeFormer', progress=True, file_name=None)
     checkpoint = torch.load(ckpt_path)['params_ema']
     net.load_state_dict(checkpoint)
     net.eval()
@@ -66,7 +75,9 @@ if __name__ == '__main__':
         try:
             with torch.no_grad():
                 # w is fixed to 0 since we didn't train the Stage III for colorization
-                output_face = net(input_face, w=0, adain=True)[0] 
+                #pdb.set_trace()
+                score_injection=args.score if args.score is not None else 0
+                output_face = net(input_face, score=torch.tensor(score_injection).cuda(),w=0, adain=True)[0] 
                 save_face = tensor2img(output_face, rgb2bgr=True, min_max=(-1, 1))
             del output_face
             torch.cuda.empty_cache()

@@ -129,12 +129,13 @@ class VQGANModel(SRModel):
 
         self.optimizer_g.zero_grad()
         if self.opt['network_g']['quantizer'] == 'dual_codebook':
-            self.output, l_codebook, quant_stats,quant_stats_aesthetic = self.net_g(self.gt,None,self.aesthetic_score)
+            self.output, l_codebook,l_codebook_aesthetic, quant_stats,quant_stats_aesthetic = self.net_g(self.gt,None,self.aesthetic_score)
         else:
-            self.output, l_codebook, quant_stats,quant_stats_aesthetic = self.net_g(self.gt,None,None)
+            self.output, l_codebook,l_codebook_aesthetic, quant_stats,quant_stats_aesthetic = self.net_g(self.gt,None,None)
 
         l_codebook = l_codebook*self.l_weight_codebook
-
+        if l_codebook_aesthetic:
+            l_codebook_aesthetic=l_codebook_aesthetic*self.l_weight_codebook
         l_g_total = 0
         if current_iter % self.net_d_iters == 0 and current_iter > self.net_g_start_iter:
             # pixel loss
@@ -163,29 +164,40 @@ class VQGANModel(SRModel):
 
             l_g_total += l_codebook
             loss_dict['l_codebook'] = l_codebook
-
+            if l_codebook_aesthetic is not None:
+                l_g_total += l_codebook_aesthetic
+                loss_dict['l_codebook_aesthetic'] = l_codebook_aesthetic
             l_g_total.backward()
             self.optimizer_g.step()
 
         # optimize net_d
         if  current_iter > self.net_d_start_iter:
+            #print(f"=========={current_iter}===========")
             for p in self.net_d.parameters():
                 p.requires_grad = True
 
             self.optimizer_d.zero_grad()
             # real
+            #print("line180")
             real_d_pred = self.net_d(self.gt)
             l_d_real = self.cri_gan(real_d_pred, True, is_disc=True)
             loss_dict['l_d_real'] = l_d_real
             loss_dict['out_d_real'] = torch.mean(real_d_pred.detach())
             l_d_real.backward()
             # fake
+            #print("line187")
             fake_d_pred = self.net_d(self.output.detach())
             l_d_fake = self.cri_gan(fake_d_pred, False, is_disc=True)
             loss_dict['l_d_fake'] = l_d_fake
             loss_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
             l_d_fake.backward()
+            #print("line194")
+
             self.optimizer_d.step()
+        # log_dict = OrderedDict()
+        # for name, value in loss_dict.items():
+        #         log_dict[name] = value.mean().detach()
+        # self.log_dict = self.reduce_loss_dict(log_dict)    
 
         self.log_dict = self.reduce_loss_dict(loss_dict)
 

@@ -9,11 +9,11 @@ datasets:
   train:
     name: FFHQ
     type: FFHQBlindDataset
-    dataroot_gt: datasets/ffhq/ffhq_512
+    dataroot_gt: /data1/hp/FFHQ512/images512x512
     filename_tmpl: '{}'
     io_backend:
       type: disk
-
+    init_quality_path: /home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/cvpr2025/ensemble.csv
     in_size: 512
     gt_size: 512
     mean: [0.5, 0.5, 0.5]
@@ -22,12 +22,13 @@ datasets:
     use_corrupt: false
     gen_inpaint_mask: true
 
-    latent_gt_path: ~ # without pre-calculated latent code
+    #latent_gt_path: ~ # without pre-calculated latent code
     # latent_gt_path: './experiments/pretrained_models/VQGAN/latent_gt_code1024.pth'
-
+    latent_gt_path: '/home/hp/work/CodeFormer_aesthetic/weights/CodeFormer_aesthetic/42_20w_common_latent_gt_code1024.pth'
+    latent_gt_path_aesthetic: '/home/hp/work/CodeFormer_aesthetic/weights/CodeFormer_aesthetic/42_20w_HQplus_latent_gt_code1024.pth'
     # data loader
     num_worker_per_gpu: 2
-    batch_size_per_gpu: 3
+    batch_size_per_gpu: 4
     dataset_enlarge_ratio: 100
     prefetch_mode: ~
 
@@ -51,15 +52,18 @@ network_g:
   codebook_size: 1024
   connect_list: ['32', '64', '128']
   fix_modules: ['quantize','generator']
-  vqgan_path: './experiments/pretrained_models/vqgan/vqgan_code1024.pth' # pretrained VQGAN 
-
-network_vqgan: # this config is needed if no pre-calculated latent
-  type: VQAutoEncoder
-  img_size: 512
-  nf: 64
-  ch_mult: [1, 2, 2, 4, 4, 8]
-  quantizer: 'nearest'
-  codebook_size: 1024
+  vqgan_path: '/home/hp/work/CodeFormer_aesthetic/experiments/20241028_073143_VQGAN-512-ds32-nearest-stage1/models/net_g_200000.pth' # pretrained VQGAN 
+  num_class: 10
+  score_embedding: add
+  quantizer_type: 'dual_codebook'
+  aesthetic_weight: 0.0
+# network_vqgan: # this config is needed if no pre-calculated latent
+#   type: VQAutoEncoder
+#   img_size: 512
+#   nf: 64
+#   ch_mult: [1, 2, 2, 4, 4, 8]
+#   quantizer: 'nearest'
+#   codebook_size: 1024
 
 network_d:
   type: VQGANDiscriminator
@@ -85,7 +89,8 @@ train:
   entropy_loss_weight: 0.5
   scale_adaptive_gan_weight: 0.1
   fidelity_weight: 1.0
-
+  quality_loss: false
+  aesthetic_weight: 0.8
   optim_g:
     type: Adam
     lr: !!float 7e-5
@@ -145,7 +150,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: !!float 1e4
+  save_checkpoint_freq: !!float 5e4
   use_tb_logger: true
   wandb:
     project: ~

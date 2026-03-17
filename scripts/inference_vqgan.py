@@ -1,5 +1,6 @@
 import argparse
 import glob
+import pdb
 import numpy as np
 import os
 import cv2
@@ -63,14 +64,14 @@ if __name__ == '__main__':
     ckpt_path = args.ckpt_path
     codebook_size = args.codebook_size
 
-    vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'nearest',
-                                                codebook_size=codebook_size,aesthetic_threshold=0.0,aesthetic_weight=1.0).to(device)
+    vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'dual_codebook',
+                                                codebook_size=codebook_size,aesthetic_threshold=0.91,aesthetic_weight=1.0,quantize_fusion="add").to(device)
     checkpoint = torch.load(ckpt_path)['params_ema']
 
     vqgan.load_state_dict(checkpoint)
     vqgan.eval()
-
-    for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g')))[:300]:
+    #pdb.set_trace()
+    for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g'))):
         img_name = os.path.basename(img_path)
         print(img_name)
         img = cv2.imread(img_path)
@@ -78,7 +79,7 @@ if __name__ == '__main__':
         normalize(img, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
         img = img.unsqueeze(0).to(device)
         with torch.no_grad():
-            output = vqgan(img,aesthetic_score=0.85)[0]
+            output = vqgan(img,aesthetic_score=0.95)[0]
             output = tensor2img(output, min_max=[-1,1])
             img = tensor2img(img, min_max=[-1,1])
             restored_img = np.concatenate([img, output], axis=1)

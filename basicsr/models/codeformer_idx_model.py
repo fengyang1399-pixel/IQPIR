@@ -88,10 +88,17 @@ class CodeFormerIdxModel(SRModel):
         self.topiq_type = train_opt.get('topiq_type', None)
         if self.topiq_type:
             print(f"=========================topiq loss:{self.topiq_type}======================")
-            self.topiq_loss_weight = train_opt.get('topiq_loss_weight', 0.1)
+            self.topiq_loss_weight = train_opt.get('topiq_loss_weight', 0.15)
             self.topiq_iqa=pyiqa.create_metric(self.topiq_type, device='cuda', as_loss=True)
         else:
             self.topiq_iqa=None
+        self.maniqaloss = train_opt.get('maniqa', None)
+        if self.maniqaloss:
+            print(f"=========================maniqa loss======================")
+            self.maniqaloss_weight = train_opt.get('maniqa_loss_weight', 0.15)
+            self.maniqa=pyiqa.create_metric("maniqa", device='cuda', as_loss=True)
+        else:
+            self.maniqa=None
     def setup_optimizers(self):
         train_opt = self.opt['train']
         # optimizer g
@@ -152,7 +159,7 @@ class CodeFormerIdxModel(SRModel):
             loss_dict['cross_entropy_loss'] = cross_entropy_loss
         # reward_loss-MUSIQ-GF20K
         if self.quality_loss:
-            pdb.set_trace()
+            #pdb.set_trace()
             output = torch.clamp((output + 1.0) / 2.0, min=0.0, max=1.0)
             if(output.shape[-1]!=512):
                 output=torchvision.transforms.Resize(size=512)(output)
@@ -160,15 +167,25 @@ class CodeFormerIdxModel(SRModel):
             quality_loss = torch.nn.functional.relu(-quality.mean() + 1) * self.quality_loss_weight
             l_g_total += quality_loss
             loss_dict['quality_loss'] = quality_loss
-        pdb.set_trace()
-        if self.topiq_iqa:
-            topiq_score=self.topiq_iqa(output,align_crop_face=False)
-            topiq_loss=(1-topiq_score)*self.topiq_loss_weight
+        
+        if self.topiq_iqa and current_iter>=100000:
+            #pdb.set_trace()
+            topiq_score=self.topiq_iqa(output)
+            topiq_loss=(100-topiq_score)*self.topiq_loss_weight
             l_g_total += topiq_loss
-            loss_dict['topiq_loss'] = quality_loss
+            loss_dict['topiq_score'] = topiq_score
+        else:
+            loss_dict['topiq_score'] = torch.tensor(0,device=l_g_total.device)
+        if self.maniqa:
+            #pdb.set_trace()
+            maniqa_score=self.maniqa(output)
+            maniqa_loss=(1-maniqa_score)*self.maniqaloss_weight
+            l_g_total += maniqa_loss
+            loss_dict['maniqa_score'] = maniqa_score
 
-
+        #pdb.set_trace()
         l_g_total.backward()
+        #pdb.set_trace()
         self.optimizer_g.step()
 
         if self.ema_decay > 0:

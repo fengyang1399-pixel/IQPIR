@@ -1,7 +1,7 @@
 # general settings
 name: CodeFormer_colorization
 model_type: CodeFormerIdxModel
-num_gpu: 8
+num_gpu: 7
 manual_seed: 0
 
 # dataset and data loader settings
@@ -9,11 +9,12 @@ datasets:
   train:
     name: FFHQ
     type: FFHQBlindDataset
-    dataroot_gt: datasets/ffhq/ffhq_512
+    dataroot_gt: /data1/hp/FFHQ512/images512x512
     filename_tmpl: '{}'
     io_backend:
       type: disk
-
+    init_quality_path: /home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/cvpr2025/ensemble.csv
+    normalize_quality: false
     in_size: 512
     gt_size: 512
     mean: [0.5, 0.5, 0.5]
@@ -31,14 +32,16 @@ datasets:
     downsample_range: [4, 30]
     noise_range: [0, 20]
     jpeg_range: [30, 80]
-
+    # latent_gt_path: '/home/hp/work/CodeFormer_aesthetic/weights/CodeFormer_aesthetic/42_20w_common_latent_gt_code1024.pth'
+    # latent_gt_path_aesthetic: '/home/hp/work/CodeFormer_aesthetic/weights/CodeFormer_aesthetic/42_20w_HQplus_latent_gt_code1024.pth'
+    latent_gt_path: '/data1/hp/ckpts/codeformer_src/latent_gt_code1024.pth'
     # color jitter and gray
     color_jitter_prob: 0.3
     color_jitter_shift: 20
     color_jitter_pt_prob: 0.3
     gray_prob: 0.01
 
-    latent_gt_path: ~ # without pre-calculated latent code
+    #latent_gt_path: ~ # without pre-calculated latent code
     # latent_gt_path: './experiments/pretrained_models/VQGAN/latent_gt_code1024.pth'
 
     # data loader
@@ -67,15 +70,18 @@ network_g:
   codebook_size: 1024
   connect_list: ['32', '64', '128', '256']
   fix_modules: ['quantize','generator']
-  vqgan_path: './experiments/pretrained_models/vqgan/vqgan_code1024.pth' # pretrained VQGAN 
-
-network_vqgan: # this config is needed if no pre-calculated latent
-  type: VQAutoEncoder
-  img_size: 512
-  nf: 64
-  ch_mult: [1, 2, 2, 4, 4, 8]
-  quantizer: 'nearest'
-  codebook_size: 1024
+  vqgan_path: '/data1/hp/ckpts/codeformer_src/vqgan_code1024.pth' # pretrained VQGAN 
+  num_class: 10
+  score_embedding: add
+  quantizer_type: 'nearest'
+  aesthetic_weight: 0.0
+  #network_vqgan: # this config is needed if no pre-calculated latent
+  # type: VQAutoEncoder
+  # img_size: 512
+  # nf: 64
+  # ch_mult: [1, 2, 2, 4, 4, 8]
+  # quantizer: 'nearest'
+  # codebook_size: 1024
 
 # path
 path:
@@ -93,6 +99,7 @@ train:
   cross_entropy_loss: true
   entropy_loss_weight: 0.5
   fidelity_weight: 0
+  quality_loss: false
 
   optim_g:
     type: Adam
@@ -105,7 +112,7 @@ train:
     milestones: [400000, 450000]
     gamma: 0.5
 
-  total_iter: 500000
+  total_iter: 250000
 
   warmup_iter: -1  # no warm up
   ema_decay: 0.995
@@ -131,7 +138,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: !!float 1e4
+  save_checkpoint_freq: !!float 5e4
   use_tb_logger: true
   wandb:
     project: ~

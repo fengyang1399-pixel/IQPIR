@@ -4,6 +4,8 @@ import random
 import pandas as pd
 from pandas import read_excel
 import numpy as np
+import matplotlib.pyplot as plt
+import numpy as np
 def random_select_for_user_study():
     # 目录列表
     directories = ['/data/results/codeformer_aesthetic/codeformer_stage2/codeformer_aesthetic_13_2/input_lfw_testaw1_20w/restored_faces',
@@ -96,7 +98,11 @@ def user_study():
     pd.DataFrame(array.T).to_csv('user_study_average.csv',index=False)
 def user_study_count():
     avg_score=pd.read_csv('user_study_average.csv')
-    #pdb.set_trace()
+    pdb.set_trace()
+    print(avg_score['0'].mean(),avg_score['1'].mean(),avg_score['2'].mean())
+    print(((avg_score['0']>=avg_score['1']) &(avg_score['0']>=avg_score['2'])).sum())
+    print(((avg_score['1']>=avg_score['0'] ) &( avg_score['1']>=avg_score['2'])).sum())
+    print(((avg_score['2']>=avg_score['1'] ) &( avg_score['2']>=avg_score['0'])).sum())
     cmp2_1=(avg_score['1']>avg_score['0']).sum()
     cmp2_3=(avg_score['1']>avg_score['2']).sum()
     print(cmp2_1,cmp2_3)
@@ -137,9 +143,108 @@ def boxplot():
     #plt.subplots_adjust(left=0.1, right=0.99, top=0.99, bottom=0.06)
     plt.savefig('boxplot_userstudy.jpg')
 
+def plot_score_distribution():
+    path="/home/hp/work/CodeFormer_aesthetic/ffhq_ensemble.csv"
+    df=pd.read_csv(path)
+    scores1=np.asarray(df["topiq_nr_face"])
+    scores2=np.asarray(df["musiq_gfiqa"])
+    scores3=np.asarray(df["qalign"])
+    scores4=np.asarray(df["score"])
+    #scores=(scores-min(scores))/(max(scores)-min(scores)+0.00001)
+    # Splitting the data into 50 bins and counting the number of elements in each bin
+    counts1, bin_edges1 = np.histogram(scores1, bins=10)
+    counts2, bin_edges2 = np.histogram(scores2, bins=10)
+    counts3, bin_edges3 = np.histogram(scores3, bins=10)
+    counts4, bin_edges4 = np.histogram(scores4, bins=10)
+
+    # Plotting
+    print(counts1)
+    print(bin_edges1)
+    plt.figure(figsize=(6, 4))
+    plt.plot(bin_edges1[:-1], counts1, marker='o',label="Topiq-GFIQA") # Using bin_edges[1:] to align counts with their respective bins
+    plt.plot(bin_edges2[:-1], counts2, marker='p',label="Musiq-GFIQA") # Using bin_edges[1:] to align counts with their respective bins
+    plt.plot(bin_edges3[:-1], counts3, marker='s',label="Q-Align") # Using bin_edges[1:] to align counts with their respective bins
+    plt.plot(bin_edges4[:-1], counts4, marker='*',label="Average score") # Using bin_edges[1:] to align counts with their respective bins
+
+
+    # plt.bar(range(len(counts1)), counts1, label="Topiq-g") # Using bin_edges[1:] to align counts with their respective bins
+    # plt.bar(range(len(counts1)), counts2, label="musiq-g") # Using bin_edges[1:] to align counts with their respective bins
+    # plt.bar(range(len(counts1)), counts3, label="qalign") # Using bin_edges[1:] to align counts with their respective bins
+    plt.subplots_adjust(left=0.10,right=0.99,top=0.99,bottom=0.12)
+    # for i in range(len(counts1)):
+    #     plt.text(bin_edges1[i],counts1[i],str(counts1[i]))
+    #plt.title("Distribution of FFHQ in 10 Bins.")
+    plt.yticks([5000,10000,15000,20000,25000,30000,35000,40000],["5k","10k","15k","20k","25k","30k","35k","40k"])
+    plt.xlabel("Normalized score")
+    plt.ylabel("Counts")
+    plt.legend()
+    # plt.grid(True)
+    plt.savefig('/home/hp/work/CodeFormer_aesthetic/ffhq_ensemble.png')
+
+
+def ensemble_score():
+    p1="/home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/ntire/ffhq_musiq_koniq.csv"
+    p2="/home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/ntire/ffhq_maniqa.csv"
+    p3="/home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/ntire/ffhq_qalign.csv"
+    data1,data2,data3=pd.read_csv(p1)["score"],pd.read_csv(p2)["score"],pd.read_csv(p3)["score"]
+    #pdb.set_trace()
+    max1,min1=max(data1),min(data1)
+    max2,min2=max(data2),min(data2)
+    max3,min3=max(data3),min(data3)
+    data1=(data1-min1)/(max1-min1+1e-6)
+    data2=(data2-min2)/(max2-min2+1e-6)
+    data3=(data3-min3)/(max3-min3+1e-6)
+    avg=(data1+data2+data3)/3
+    df=pd.DataFrame()
+    df["imagename"]=pd.read_csv(p1)["imagename"]
+    df["musiq_koniq"]=data1
+    df["maniqa"]=data2
+    df["qalign"]=data3
+    df["avg"]=avg
+    df.to_csv("/home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/ntire/ffhq_ensemble_v2.csv",index=False)
+
+
+def filter_ffhq():
+    ffhq=pd.read_csv("/home/hp/work/CodeFormer_aesthetic/ffhq_ensemble.csv")
+    pdb.set_trace()
+    for i,row in ffhq.iterrows():
+        if row["score"]>=0.85 and row["score"]<0.9:
+            os.system(f'cp /data1/hp/FFHQ512/images512x512/{row["imagename"]} /data1/hp/FFHQ512/s9/{row["imagename"]}')
+def plot_score_distribution_underwater():
+    path="/home/hp/work/UnderwaterRanker/results/ranker_reference890_result_norm.csv"
+    df=pd.read_csv(path)
+
+    scores4=np.asarray(df["score"])
+    #scores=(scores-min(scores))/(max(scores)-min(scores)+0.00001)
+    # Splitting the data into 50 bins and counting the number of elements in each bin
+
+    counts4, bin_edges4 = np.histogram(scores4, bins=10)
+
+    # Plotting
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(bin_edges4[:-1], counts4, marker='.',label="Underwater-ranker score") # Using bin_edges[1:] to align counts with their respective bins
+
+
+    # plt.bar(range(len(counts1)), counts1, label="Topiq-g") # Using bin_edges[1:] to align counts with their respective bins
+    # plt.bar(range(len(counts1)), counts2, label="musiq-g") # Using bin_edges[1:] to align counts with their respective bins
+    # plt.bar(range(len(counts1)), counts3, label="qalign") # Using bin_edges[1:] to align counts with their respective bins
+    plt.subplots_adjust(left=0.10,right=0.99,top=0.99,bottom=0.12)
+    # for i in range(len(counts1)):
+    #     plt.text(bin_edges1[i],counts1[i],str(counts1[i]))
+    #plt.title("Distribution of FFHQ in 10 Bins.")
+    # plt.yticks([5000,10000,15000,20000,25000,30000,35000,40000],["5k","10k","15k","20k","25k","30k","35k","40k"])
+    plt.xlabel("Normalized score")
+    plt.ylabel("Counts")
+    plt.legend()
+    # plt.grid(True)
+    plt.savefig('/home/hp/work/UnderwaterRanker/results/uiebd_scroe.png')
 #random_select_for_user_study()
 #get_images()
 #concat_image()
 #user_study()
-user_study_count()
-boxplot()
+#user_study_count()
+# boxplot()
+#plot_score_distribution_underwater()
+#filter_ffhq()
+ensemble_score()

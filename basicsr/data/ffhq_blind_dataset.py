@@ -12,7 +12,7 @@ from torchvision.transforms.functional import (adjust_brightness, adjust_contras
                                         adjust_hue, adjust_saturation, normalize)
 from basicsr.data import gaussian_kernels as gaussian_kernels
 from basicsr.data.transforms import augment
-from basicsr.data.data_util import paths_from_folder, brush_stroke_mask, random_ff_mask
+from basicsr.data.data_util import paths_from_folder, brush_stroke_mask, random_ff_mask,paths_from_folder_with_score_filter
 from basicsr.utils import FileClient, get_root_logger, imfrombytes, img2tensor
 from basicsr.utils.registry import DATASET_REGISTRY
 import pandas as pd
@@ -30,7 +30,7 @@ class FFHQBlindDataset(data.Dataset):
         self.init_quality_df= pd.read_csv(opt['init_quality_path'],index_col='imagename')
         #self.init_quality_df.index=self.init_quality_df['imagename']
         #pdb.set_trace()
-        self.normalize_quality=opt.get('normalize_quality', True)
+        self.normalize_quality=opt.get('normalize_quality', False)
         self.gt_folder = opt['dataroot_gt']
         self.gt_size = opt.get('gt_size', 512)
         self.in_size = opt.get('in_size', 512)
@@ -70,8 +70,8 @@ class FFHQBlindDataset(data.Dataset):
             with open(osp.join(self.gt_folder, 'meta_info.txt')) as fin:
                 self.paths = [line.split('.')[0] for line in fin]
         else:
-            self.paths = paths_from_folder(self.gt_folder)
-
+            self.paths = paths_from_folder_with_score_filter(self.gt_folder,self.init_quality_df[self.init_quality_df["score"]>=0])#只用0.7以上的图片训
+        print("过滤0.0以下的图片后剩余图片数量：",len(self.paths))
         # inpainting mask
         self.gen_inpaint_mask = opt.get('gen_inpaint_mask', False)
         if self.gen_inpaint_mask:
@@ -194,10 +194,12 @@ class FFHQBlindDataset(data.Dataset):
         # load gt image
         gt_path = self.paths[index]
         name = osp.basename(gt_path)
+        ##构造celeba测试集时注释 198-201行
         if self.normalize_quality:
             quality_score=(self.init_quality_df.loc[name,'score']-min(self.init_quality_df['score']))/(0.001+max(self.init_quality_df['score'])-min(self.init_quality_df['score']))
         else:
-            quality_score=torch.tensor(self.init_quality_df.loc[name].tolist())
+            quality_score=torch.tensor(self.init_quality_df.loc[name,"score"])
+        #quality_score=torch.tensor(0) #构造celeba测试集
         name=osp.basename(gt_path)[:-4]
         img_bytes = self.file_client.get(gt_path)
         img_gt = imfrombytes(img_bytes, float32=True)
@@ -205,6 +207,7 @@ class FFHQBlindDataset(data.Dataset):
         # random horizontal flip
         img_gt, status = augment(img_gt, hflip=self.opt['use_hflip'], rotation=False, return_status=True)
 
+        #构造celeba测试集时注释 211-221行
         if self.load_latent_gt:
             if status[0]:
                 latent_gt = self.latent_gt_dict['hflip'][name]
@@ -216,6 +219,7 @@ class FFHQBlindDataset(data.Dataset):
                 latent_gt_aesthetic = self.latent_gt_dict_aesthetic['hflip'][name]
             else:
                 latent_gt_aesthetic = self.latent_gt_dict_aesthetic['orig'][name]
+        #latent_gt,latent_gt_aesthetic,quality_score=0,0,0 #构造celeba测试集
         if self.crop_components:
             locations_gt, locations_in = self.get_component_locations(name, status)
 
@@ -241,6 +245,7 @@ class FFHQBlindDataset(data.Dataset):
 
             # downsample
             scale = np.random.uniform(self.downsample_range[0], self.downsample_range[1])
+            #scale=8 #构造celeba测试集
             img_in = cv2.resize(img_in, (int(self.gt_size // scale), int(self.gt_size // scale)), interpolation=cv2.INTER_LINEAR)
 
             # noise
@@ -252,7 +257,7 @@ class FFHQBlindDataset(data.Dataset):
 
             # jpeg
             if self.jpeg_range is not None:
-                jpeg_p = np.random.uniform(self.jpeg_range[0], self.jpeg_range[1])
+                jpeg_p = np.random.randint(self.jpeg_range[0], self.jpeg_range[1])
                 #print(jpeg_p)
                 encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_p]
                 _, encimg = cv2.imencode('.jpg', img_in * 255., encode_param)
@@ -260,7 +265,7 @@ class FFHQBlindDataset(data.Dataset):
 
             # resize to in_size
             img_in = cv2.resize(img_in, (self.in_size, self.in_size), interpolation=cv2.INTER_LINEAR)
-
+            #cv2.imwrite(f"/data1/hp/celeba_512_validation_lq_8x/{osp.basename(gt_path)}",np.clip((img_in * 255.0).round(), 0, 255)) #构造celeba测试集
         # if self.gen_inpaint_mask:
         #     inpaint_mask = random_ff_mask(shape=(self.gt_size,self.gt_size), 
         #         max_angle = self.mask_max_angle, max_len = self.mask_max_len, 
@@ -282,7 +287,7 @@ class FFHQBlindDataset(data.Dataset):
         if self.gray_prob and np.random.uniform() < self.gray_prob:
             img_in = cv2.cvtColor(img_in, cv2.COLOR_BGR2GRAY)
             img_in = np.tile(img_in[:, :, None], [1, 1, 3])
-
+        #cv2.imwrite(f"/data1/hp/celeba_512_validation_color_lq/{osp.basename(gt_path)}",np.clip((img_in * 255.0).round(), 0, 255)) #构造celeba测试集
         # BGR to RGB, HWC to CHW, numpy to tensor
         img_in, img_gt = img2tensor([img_in, img_gt], bgr2rgb=True, float32=True)
 
@@ -310,6 +315,7 @@ class FFHQBlindDataset(data.Dataset):
 
         if self.load_latent_gt:
             return_dict['latent_gt'] = latent_gt
+        if self.load_latent_gt_aesthetic:
             return_dict['latent_gt_aesthetic'] = latent_gt_aesthetic
 
         # if self.gen_inpaint_mask:

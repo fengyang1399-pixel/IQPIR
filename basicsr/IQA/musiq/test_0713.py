@@ -15,9 +15,9 @@ from model.model_main import IQARegression
 # configuration
 config = Config({
     'gpu_id': 1,                                                        # specify gpu number to use
-    'dirname': '/home/ma-user/work/CodeFormer-master/results/test_100_0.0_ori/restored_faces/',     # directory of data root
-    'checkpoint': './weights/epoch80.pth',                              # weights of trained model
-    'result_score_txt': 'FFHQ_512_score.txt',                               # file for saving inference results
+    #'dirname': '/data1/hp/results/DAEFR_score/DAEFR_lfw_s9/restored_faces',     # directory of data root
+    'checkpoint': '/home/hp/work/CodeFormer_aesthetic/basicsr/IQA/musiq/weights/epoch80.pth',                              # weights of trained model
+    #'result_score_txt': '/home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/cvpr2025/lfw_daefr_s9_musiq_g.csv',                               # file for saving inference results
     'batch_size': 1,                                                    # fix the value as 1 (for inference)
 
     # ViT structure
@@ -92,50 +92,107 @@ pred_total = []
 # filenames = df['name'].values.tolist()
 #filenames = os.listdir(config.dirname)
 # filenames.sort()
-filenames = os.listdir(config.dirname)
-result_score_txt = config.dirname.split('/')[-3] + '.txt'
-print('save file name: ', result_score_txt)
-f = open(result_score_txt, 'w')
+datedir_list=[
+    # "/data1/hp/results/gfpgan/celeba/restored_faces",
+    #           "/data1/hp/results/rf/RestoreFormer_celeba/restored_faces",
+    #           "/data1/hp/results/dr2/celeba_512_validation_lq/enhancement",
+    #           "/data1/hp/results/cvpr25/cf_src/celebahq_w0/restored_faces",
+    #           "/data1/hp/results/DAEFR_celeba/restored_faces",
+    #           "/data1/hp/results/difface/restored_faces/celeba_src/restored_faces",
+    #           "/data1/hp/results/difface/restored_faces/celeba_score9/restored_faces",
+    #           "/data1/hp/results/DAEFR_score/DAEFR_celeba_s9/restored_faces"
+    # "/data1/hp/results/codeformer_stage2/codeformer_aesthetic_43/input_lfw_testaw0.8_score9_20w/restored_faces",
+    # "/data1/hp/results/codeformer_stage2/codeformer_aesthetic_43/input_web_testaw0.8_score9_20w/restored_faces",
+    # "/data1/hp/results/codeformer_stage2/codeformer_aesthetic_43/input_wider_testaw0.8_score9_20w/restored_faces",
+    # "/data1/hp/celeba_512_validation_lq",
+    # "/data1/hp/results/codeformer_stage2/codeformer_aesthetic_43/input_celcebalq_testaw0.8_score9_20w/restored_faces"
+    # "/data1/hp/results/interlcm/celeba/restored_faces",
+    # "/data1/hp/results/interlcm/lfw/restored_faces",
+    # "/data1/hp/results/interlcm/web/restored_faces",
+    # "/data1/hp/results/interlcm/wider/restored_faces"
+    # "/data1/hp/results/waveface/LFW_ours",
+    # "/data1/hp/results/waveface/WebPhoto_Ours",
+    # "/data1/hp/results/waveface/Wider_Ours"
+    "/data1/hp/results/DAEFR_wider/restored_faces"
 
-# input mask (batch_size x len_sqe+1)
-mask_inputs = torch.ones(config.batch_size, config.n_enc_seq+1).to(config.device)
+              ]
+result_csv_list=[
+    # "celebalq_gfpgan_musiq-g.csv",
+    #              "celebalq_rf_musiq-g.csv",
+    #              "celebalq_dr2_musiq-g.csv",
+    #              "celebalq_cf_musiq-g.csv",
+    #              "celebalq_daefr_musiq-g.csv",
+    #              "celebalq_difface_musiq-g.csv",
+    #              "celebalq_difface_score9_musiq-g.csv",
+    #              "celebalq_daefr_score9_musiq-g.csv",
+    # "lfw_ours43_s9_musiq-g.csv",
+    # "web_ours43_s9_musiq-g.csv",
+    # "wdier_ours43_s9_musiq-g.csv",
+    # "celebalq.csv","celebalq_ours43s9_musiq-g.csv"
+    #"celeba_overoptization_musiq-g.csv"
+    # "celeba_interlcm_musiq-g.csv",
+    # "lfw_interlcm_musiq-g.csv",
+    # "web_interlcm_musiq-g.csv",
+    # "wider_interlcm_musiq-g.csv"
+    # "lfw_waveface_musiq-g.csv",
+    # "web_waveface_musiq-g.csv",
+    # "wider_waveface_musiq-g.csv"
+    "wider_daefr_musiq-g.csv"
 
-# inference
-for filename in tqdm(filenames):
-    #d_img_name = os.path.join(config.dirname, filename)
-    d_img_name = os.path.join(config.dirname, filename)
-    #ext = os.path.splitext(d_img_name)[-1]
-    #if ext == '.png':
-    # multi-scale feature extraction
-    d_img_org = cv2.imread(d_img_name)
-    d_img_org = cv2.cvtColor(d_img_org, cv2.COLOR_BGR2RGB)
-    d_img_org = cv2.resize(d_img_org, (512, 512))
-    d_img_org = np.array(d_img_org).astype('float32') / 255
+]
+for idx in range(len(datedir_list)):
+    dirname=datedir_list[idx]
+    save_csv=result_csv_list[idx]
+    filenames = os.listdir(dirname)
+    # result_score_txt = dirname.split('/')[-3] + '.txt'
+    # print('save file name: ', result_score_txt)
+    #f = open(result_score_txt, 'w')
 
-    h, w, c = d_img_org.shape
-    d_img_scale_1 = cv2.resize(d_img_org, dsize=(config.scale_1, int(h*(config.scale_1/w))), interpolation=cv2.INTER_CUBIC)
-    d_img_scale_2 = cv2.resize(d_img_org, dsize=(config.scale_2, int(h*(config.scale_2/w))), interpolation=cv2.INTER_CUBIC)
-    d_img_scale_2 = d_img_scale_2[:160, :, :]
+    # input mask (batch_size x len_sqe+1)
+    mask_inputs = torch.ones(config.batch_size, config.n_enc_seq+1).to(config.device)
+    result=[["imagename","score"]]
+    # inference
+    avg=0
+    for filename in tqdm(filenames):
+        #d_img_name = os.path.join(config.dirname, filename)
+        d_img_name = os.path.join(dirname, filename)
+        #ext = os.path.splitext(d_img_name)[-1]
+        #if ext == '.png':
+        # multi-scale feature extraction
+        d_img_org = cv2.imread(d_img_name)
+        d_img_org = cv2.cvtColor(d_img_org, cv2.COLOR_BGR2RGB)
+        d_img_org = cv2.resize(d_img_org, (512, 512))
+        d_img_org = np.array(d_img_org).astype('float32') / 255
 
-    d_img_org = transforms(d_img_org)
-    d_img_org = torch.tensor(d_img_org.to(config.device)).unsqueeze(0)
-    d_img_scale_1 = transforms(d_img_scale_1)
-    d_img_scale_1 = torch.tensor(d_img_scale_1.to(config.device)).unsqueeze(0)
-    d_img_scale_2 = transforms(d_img_scale_2)
-    d_img_scale_2 = torch.tensor(d_img_scale_2.to(config.device)).unsqueeze(0)
+        h, w, c = d_img_org.shape
+        d_img_scale_1 = cv2.resize(d_img_org, dsize=(config.scale_1, int(h*(config.scale_1/w))), interpolation=cv2.INTER_CUBIC)
+        d_img_scale_2 = cv2.resize(d_img_org, dsize=(config.scale_2, int(h*(config.scale_2/w))), interpolation=cv2.INTER_CUBIC)
+        d_img_scale_2 = d_img_scale_2[:160, :, :]
 
-    feat_dis_org = model_backbone(d_img_org)
-    feat_dis_scale_1 = model_backbone(d_img_scale_1)
-    feat_dis_scale_2 = model_backbone(d_img_scale_2)
+        d_img_org = transforms(d_img_org)
+        d_img_org = torch.tensor(d_img_org.to(config.device)).unsqueeze(0)
+        d_img_scale_1 = transforms(d_img_scale_1)
+        d_img_scale_1 = torch.tensor(d_img_scale_1.to(config.device)).unsqueeze(0)
+        d_img_scale_2 = transforms(d_img_scale_2)
+        d_img_scale_2 = torch.tensor(d_img_scale_2.to(config.device)).unsqueeze(0)
 
-    # quality prediction
-    pred = model_transformer(mask_inputs, feat_dis_org, feat_dis_scale_1, feat_dis_scale_2)
-    pred_total = np.append(pred_total, float(pred.item()))
+        feat_dis_org = model_backbone(d_img_org)
+        feat_dis_scale_1 = model_backbone(d_img_scale_1)
+        feat_dis_scale_2 = model_backbone(d_img_scale_2)
 
-    # result save
-    line = '%s\t%f\n' % (filename, float(pred.item()))
-    f.write(line)
-f.close()
+        # quality prediction
+        pred = model_transformer(mask_inputs, feat_dis_org, feat_dis_scale_1, feat_dis_scale_2)
+        pred_total = np.append(pred_total, float(pred.item()))
+
+        # result save
+        line = '%s\t%f\n' % (filename, float(pred.item()))
+        avg+=float(pred.item())
+        result.append([filename,float(pred.item())])
+        #f.write(line)
+    #f.close()
+    result.append(["avg",avg/(len(result)-1)])
+    print(result[-1])
+    pd.DataFrame(result,columns=["imagename","score"]).to_csv(f"/home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/iccv25/{save_csv}",index=False)
         
 
 

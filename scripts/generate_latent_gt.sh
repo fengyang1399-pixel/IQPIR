@@ -1,0 +1,1 @@
+python generate_latent_gt.py -i /data1/hp/FFHQ512/images512x512 -o /home/hp/work/CodeFormer_aesthetic/weights/CodeFormer_aesthetic --ckpt_path /home/hp/work/CodeFormer_aesthetic/experiments/20241028_073143_VQGAN-512-ds32-nearest-stage1/models/net_g_200000.pth

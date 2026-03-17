@@ -22,6 +22,8 @@ if __name__ == '__main__':
                     help='Output folder. Default: results/<input_name>')
     parser.add_argument('--suffix', type=str, default=None, 
                     help='Suffix of the restored faces. Default: None')
+    parser.add_argument('--ckpt', type=str, default=None, 
+                    help='Suffix of the restored faces. Default: None')
     args = parser.parse_args()
 
     # ------------------------ input & output ------------------------
@@ -42,12 +44,14 @@ if __name__ == '__main__':
     test_img_num = len(input_img_list)
 
     # ------------------ set up CodeFormer restorer -------------------
-    net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=512, n_head=8, n_layers=9, 
-                                            connect_list=['32', '64', '128']).to(device)
+    # net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=512, n_head=8, n_layers=9, 
+    #                                         connect_list=['32', '64', '128']).to(device)
     
-    # ckpt_path = 'weights/CodeFormer/codeformer.pth'
-    ckpt_path = load_file_from_url(url=pretrain_model_url, 
-                                    model_dir='weights/CodeFormer', progress=True, file_name=None)
+    net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9,score_embedding="add",aesthetic_weight=0.8,
+  quantizer_type='dual_codebook',connect_list=['32', '64', '128']).to(device)
+    ckpt_path = args.ckpt
+    # ckpt_path = load_file_from_url(url=pretrain_model_url, 
+    #                                 model_dir='weights/CodeFormer', progress=True, file_name=None)
     checkpoint = torch.load(ckpt_path)['params_ema']
     net.load_state_dict(checkpoint)
     net.eval()
@@ -70,7 +74,8 @@ if __name__ == '__main__':
                 mask[m_ind==3] = 1.0
                 mask = mask.view(1, 1, 512, 512).to(device)
                 # w is fixed to 1, adain=False for inpainting
-                output_face = net(input_face, w=1, adain=False)[0]
+                #output_face = net(input_face, w=1, adain=False)[0]
+                output_face = net(input_face,score=torch.tensor(0.91).cuda(), w=1, adain=False)[0]
                 output_face = (1-mask)*input_face + mask*output_face
                 save_face = tensor2img(output_face, rgb2bgr=True, min_max=(-1, 1))
             del output_face

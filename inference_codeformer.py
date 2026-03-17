@@ -1,4 +1,6 @@
 import os
+import pdb
+import time
 import cv2
 import argparse
 import glob
@@ -55,6 +57,40 @@ def set_realesrgan():
                         category=RuntimeWarning)
     return upsampler
 
+def pca(common_codebook, hq_codebook):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+    from sklearn.metrics import silhouette_score
+    from scipy.spatial.distance import euclidean
+    common_np = common_codebook.cpu().numpy() if isinstance(common_codebook, torch.Tensor) else common_codebook
+    hq_np = hq_codebook.cpu().numpy() if isinstance(hq_codebook, torch.Tensor) else hq_codebook
+    X = np.vstack([common_np, hq_np])  # 合并后形状 (2048, 256)
+    
+    # 2. 生成标签 (0: 通用码本, 1: HQ+码本)
+    labels = np.array([0]*1024 + [1]*1024)
+    
+    # 3. PCA降维
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X)
+    
+    # 4. 可视化
+    plt.figure(figsize=(10, 8))
+    plt.scatter(X_pca[labels == 0, 0], X_pca[labels == 0, 1], 
+                c='blue', label='Common Codebook', alpha=0.6, s=30, edgecolor='w')
+    plt.scatter(X_pca[labels == 1, 0], X_pca[labels == 1, 1], 
+                c='red', label='HQ+ Codebook', alpha=0.6, s=30, edgecolor='w')
+    
+    # 添加统计信息
+    plt.title(f"PCA Visualization of Codebooks\n"
+              f"Silhouette Score: {silhouette_score(X, labels):.3f}\n"
+              f"Inter-Class Distance: {euclidean(np.mean(X[labels==0], axis=0), np.mean(X[labels==1], axis=0)):.2f}")
+    plt.xlabel("Principal Component 1")
+    plt.ylabel("Principal Component 2")
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.savefig("/home/hp/work/CodeFormer_aesthetic/pca.jpg")
+
 if __name__ == '__main__':
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = get_device()
@@ -71,6 +107,8 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--fidelity_weight', type=float, default=0.5, 
             help='Balance the quality and fidelity. Default: 0.5')
     parser.add_argument('-aw', '--aesthetic_weight', type=float, default=0.5, 
+            help='Balance the quality and fidelity. Default: 0.5')
+    parser.add_argument('-score', '--score', type=float, default=None, 
             help='Balance the quality and fidelity. Default: 0.5')
     parser.add_argument('-s', '--upscale', type=int, default=2, 
             help='The final upsampling scale of the image. Default: 2')
@@ -141,29 +179,34 @@ if __name__ == '__main__':
         face_upsampler = None
 
     # ------------------ set up CodeFormer restorer -------------------
+    if args.score is None:
+        score_embedding=None
+    else:
+        score_embedding="add"
     net = ARCH_REGISTRY.get('CodeFormer')(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, quantizer_type=args.quantizer_type,aesthetic_weight=args.aesthetic_weight,
-                                            connect_list=['32', '64', '128', '256'],score_embedding=True).to(device)
+                                            connect_list=['32', '64', '128', '256'],score_embedding=score_embedding).to(device)
     
     # ckpt_path = 'weights/CodeFormer/codeformer.pth'
     ##ckpt_path = load_file_from_url(url=pretrain_model_url['restoration'], model_dir='weights/CodeFormer', progress=True, file_name=None)
-    ckpt_path = '/data/weight/codeformer_aesthetic/5_stage_score_injection/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/4_stage2_score_injection/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/6/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/7_dualcodebook_scoreinjection/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/7_2/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/8/net_g_110000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/11/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/13/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/13/net_g_150000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/16/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/17/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/13_2/net_g_150000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/11_2/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/13_2/net_g_200000.pth'
-    ckpt_path = '/data/weight/codeformer_aesthetic/12/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/5_stage_score_injection/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/4_stage2_score_injection/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/6/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/7_dualcodebook_scoreinjection/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/7_2/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/8/net_g_110000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/11/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/13/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/13/net_g_150000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/16/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/17/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/13_2/net_g_150000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/11_2/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/13_2/net_g_200000.pth'
+    # ckpt_path = '/data/weight/codeformer_aesthetic/12/net_g_200000.pth'
     ckpt_path = args.checkpoint
     print(ckpt_path)
     checkpoint = torch.load(ckpt_path)['params_ema']
+    #pdb.set_trace()
     net.load_state_dict(checkpoint,strict=True)
     net.eval()
 
@@ -187,6 +230,7 @@ if __name__ == '__main__':
         device=device)
 
     # -------------------- start to processing ---------------------
+    timecount=0
     for i, img_path in enumerate(input_img_list):
         # clean all the intermediate results to process the next image
         face_helper.clean_all()
@@ -205,6 +249,7 @@ if __name__ == '__main__':
         if args.has_aligned: 
             # the input faces are already cropped and aligned
             img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_LINEAR)
+            #img = img[img.shape[0]//2-256:img.shape[0]//2+256,img.shape[1]//2-256:img.shape[1]//2+256]
             face_helper.is_gray = is_gray(img, threshold=10)
             if face_helper.is_gray:
                 print('Grayscale input: True')
@@ -229,9 +274,11 @@ if __name__ == '__main__':
             try:
                 with torch.no_grad():
                     score_injection=(ffhq_score_list[np.random.randint(0,70000)]-min(ffhq_score_list))/(max(ffhq_score_list)-min(ffhq_score_list)+0.001)
-                    score_injection=0.85
-                    #score_injection=[[0.65,0.91,0.91,0.91]]
+                    score_injection=args.score if args.score is not None else 0
+                    #score_injection=[0.66,0.91,0.91,0.91]
+                    begintime=time.time()
                     output = net(cropped_face_t,score=torch.tensor(score_injection).cuda(), w=w, adain=True)[0]
+                    timecount+=time.time()-begintime
                     restored_face = tensor2img(output, rgb2bgr=True, min_max=(-1, 1))
                 del output
                 torch.cuda.empty_cache()
@@ -241,7 +288,6 @@ if __name__ == '__main__':
 
             restored_face = restored_face.astype('uint8')
             face_helper.add_restored_face(restored_face, cropped_face)
-
         # paste_back
         if not args.has_aligned:
             # upsample the background
@@ -279,7 +325,7 @@ if __name__ == '__main__':
                 basename = f'{basename}_{args.suffix}'
             save_restore_path = os.path.join(result_root, 'final_results', f'{basename}.png')
             imwrite(restored_img, save_restore_path)
-
+    #pdb.set_trace()
     # save enhanced video
     if input_video:
         print('Video Saving...')

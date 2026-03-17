@@ -97,14 +97,18 @@ def _get_activation_fn(activation):
 
 
 class TransformerSALayer(nn.Module):
-    def __init__(self, embed_dim, nhead=8, dim_mlp=2048, dropout=0.0, activation="gelu"):
+    def __init__(self, embed_dim, nhead=8, dim_mlp=2048, dropout=0.0, activation="gelu",score_embedding='add'):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(embed_dim, nhead, dropout=dropout)
         # Implementation of Feedforward model - MLP
         self.linear1 = nn.Linear(embed_dim, dim_mlp)
         self.dropout = nn.Dropout(dropout)
         self.linear2 = nn.Linear(dim_mlp, embed_dim)
-
+        if score_embedding=='adain':
+            self.adaLN_modulation = nn.Sequential(
+                nn.SiLU(),
+                nn.Conv2d(32, 512*6, kernel_size=3,stride=1,padding=1)
+            )
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.dropout1 = nn.Dropout(dropout)
@@ -118,21 +122,38 @@ class TransformerSALayer(nn.Module):
     def forward(self, tgt,
                 tgt_mask: Optional[Tensor] = None,
                 tgt_key_padding_mask: Optional[Tensor] = None,
-                query_pos: Optional[Tensor] = None):
+                query_pos: Optional[Tensor] = None,
+                score_emb: Optional[Tensor] = None,
+                ):
         
         # self attention
-        tgt2 = self.norm1(tgt)
-        q = k = self.with_pos_embed(tgt2, query_pos)
-        tgt2 = self.self_attn(q, k, value=tgt2, attn_mask=tgt_mask,
-                              key_padding_mask=tgt_key_padding_mask)[0]
-        tgt = tgt + self.dropout1(tgt2)
+        if score_emb is None:
+            tgt2 = self.norm1(tgt)
+            q = k = self.with_pos_embed(tgt2, query_pos)
+            tgt2 = self.self_attn(q, k, value=tgt2, attn_mask=tgt_mask,
+                                key_padding_mask=tgt_key_padding_mask)[0]
+            tgt = tgt + self.dropout1(tgt2)
 
-        # ffn
-        tgt2 = self.norm2(tgt)
-        tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt2))))
-        tgt = tgt + self.dropout2(tgt2)
-        return tgt
+            # ffn
+            tgt2 = self.norm2(tgt)
+            tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt2))))
+            tgt = tgt + self.dropout2(tgt2)
+            return tgt
+        else:
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(score_emb).flatten(2).permute(2,0,1).chunk(6, dim=-1)
+            tgt2 = self.norm1(tgt)
+            tgt2=shift_msa+scale_msa*tgt2
+            q = k = self.with_pos_embed(tgt2, query_pos)
+            tgt2 = self.self_attn(q, k, value=tgt2, attn_mask=tgt_mask,
+                                key_padding_mask=tgt_key_padding_mask)[0]
+            
+            tgt2=tgt2+gate_msa*tgt2
 
+            tgt2 = self.norm2(tgt)
+            tgt2=shift_mlp+scale_mlp*tgt2
+            tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt2))))
+            tgt = tgt + gate_mlp*self.dropout2(tgt2)
+            return tgt
 class Fuse_sft_block(nn.Module):
     def __init__(self, in_ch, out_ch):
         super().__init__()
@@ -162,7 +183,7 @@ class CodeFormer(VQAutoEncoder):
     def __init__(self, dim_embd=512, n_head=8, n_layers=9, 
                 codebook_size=1024, latent_size=256,
                 connect_list=['32', '64', '128', '256'],
-                fix_modules=['quantize','generator'], vqgan_path=None,num_class=10,quantizer_type='nearest',aesthetic_weight=1.0,score_embedding=True,bins_list=None):
+                fix_modules=['quantize','generator'], vqgan_path=None,num_class=10,quantizer_type='nearest',aesthetic_weight=1.0,score_embedding='None',bins_list=None):
         super(CodeFormer, self).__init__(512, 64, [1, 2, 2, 4, 4, 8], quantizer_type,2, [16], codebook_size,aesthetic_weight=aesthetic_weight)
 
         if vqgan_path is not None:
@@ -182,16 +203,17 @@ class CodeFormer(VQAutoEncoder):
         self.position_emb = nn.Parameter(torch.zeros(latent_size, self.dim_embd))
         self.feat_emb = nn.Linear(256, self.dim_embd)
         self.score_embedding=score_embedding
-        if self.score_embedding:
+        if self.score_embedding=='add':
             if bins_list is not None:
                 self.score_embed=nn.ModuleList()
                 for bins in bins_list:
                     self.score_embed.append(nn.Embedding(bins,16*16*256))
             else:
                 self.score_embed=nn.Embedding(num_class,16*16*256)
-
+        elif self.score_embedding=='adain':
+            self.score_embed=nn.Embedding(num_class,16*16*32)
         # transformer
-        self.ft_layers = nn.Sequential(*[TransformerSALayer(embed_dim=dim_embd, nhead=n_head, dim_mlp=self.dim_mlp, dropout=0.0) 
+        self.ft_layers = nn.Sequential(*[TransformerSALayer(embed_dim=dim_embd, nhead=n_head, dim_mlp=self.dim_mlp, dropout=0.0,score_embedding=score_embedding) 
                                     for _ in range(self.n_layers)])
 
         # logits_predict head
@@ -233,26 +255,34 @@ class CodeFormer(VQAutoEncoder):
     def forward(self, x,score=None, w=0, detach_16=True, code_only=False, adain=False):
         # ################### Encoder #####################
         assert score is not None
+        
         #pdb.set_trace()
         enc_feat_dict = {}
         out_list = [self.fuse_encoder_block[f_size] for f_size in self.connect_list]
+        #pdb.set_trace()
         for i, block in enumerate(self.encoder.blocks):
             x = block(x) 
             if i in out_list:
                 enc_feat_dict[str(x.shape[-1])] = x.clone()
 
         lq_feat = x
-        if self.score_embedding:
+        if self.score_embedding=='add':
             if isinstance(self.score_embed,nn.ModuleList):
                 for i in range(len(self.score_embed)):
                     score_emb_module=self.score_embed[i]
-                    s=(score[:,i]*20).floor().to(torch.int32)
+                    s=(score[i]*20).floor().to(torch.int32)
                     score_emb=score_emb_module(s).reshape(x.shape)
                     lq_feat+=score_emb
             else:
                 s=(score*10).floor().to(torch.int32)
                 score_emb=self.score_embed(s).reshape(x.shape)
                 lq_feat+=score_emb
+            score_emb=None
+        elif self.score_embedding=='adain':
+                s=(score*10).floor().to(torch.int32)
+                score_emb=self.score_embed(s).reshape([x.shape[0],-1,x.shape[2],x.shape[3]])
+        else:
+            score_emb=None
         # ################# Transformer ###################
         # quant_feat, codebook_loss, quant_stats = self.quantize(lq_feat)
         pos_emb = self.position_emb.unsqueeze(1).repeat(1,x.shape[0],1)
@@ -261,7 +291,7 @@ class CodeFormer(VQAutoEncoder):
         query_emb = feat_emb
         # Transformer encoder
         for layer in self.ft_layers:
-            query_emb = layer(query_emb, query_pos=pos_emb)
+            query_emb = layer(query_emb, query_pos=pos_emb,score_emb=score_emb)
 
         # output logits
         #pdb.set_trace()
@@ -293,7 +323,7 @@ class CodeFormer(VQAutoEncoder):
             quant_feat = self.quantize.get_codebook_feat(top_idx, shape=[x.shape[0],16,16,256])
         # preserve gradients
         quant_feat = lq_feat + (quant_feat - lq_feat).detach()
-
+        #quant_feat = lq_feat + (quant_feat)-(lq_feat).detach() #为了让iqaloss能计算codeboook的梯度
         if detach_16:
             quant_feat = quant_feat.detach() # for training stage III
         if adain:

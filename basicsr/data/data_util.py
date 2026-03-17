@@ -239,7 +239,24 @@ def paths_from_folder(folder):
     paths = [osp.join(folder, path) for path in paths]
     return paths
 
+def paths_from_folder_with_score_filter(folder,score_df):
+    """Generate paths from folder.
 
+    Args:
+        folder (str): Folder path.
+
+    Returns:
+        list[str]: Returned path list.
+    """
+
+    paths = list(scandir(folder))
+    newpath=[]
+    namelist=list(score_df.index)
+    for p in paths:
+        if p in namelist:
+            newpath.append(p)
+    paths = [osp.join(folder, path) for path in newpath]
+    return paths
 def paths_from_lmdb(folder):
     """Generate paths from lmdb.
 
@@ -316,8 +333,8 @@ def brush_stroke_mask(img, color=(255,255,255)):
     min_width = 30
     max_width = 70
     # very large mask ratio (test setting and refine after 200k)
-    # min_width = 80
-    # max_width = 120
+    min_width = 80
+    max_width = 120
     def generate_mask(H, W, img=None):
         average_radius = math.sqrt(H*H+W*W) / 8
         mask = Image.new('RGB', (W, H), 0)
@@ -390,3 +407,18 @@ def random_ff_mask(shape, max_angle = 10, max_len = 100, max_width = 70, times =
             cv2.line(mask, (start_y, start_x), (end_y, end_x), 1.0, brush_w)
             start_x, start_y = end_x, end_y
     return mask.astype(np.float32)
+
+def generate_celeba_inpainting_test():
+    import os,pdb
+    pdb.set_trace()
+    data_path="/data1/hp/celeba_512_validation"
+    save_path="/data1/hp/celeba_512_validation_inpainting_test"
+    os.makedirs(save_path,exist_ok=True)
+    name=os.listdir(data_path)
+    for n in name:
+        path=os.path.join(data_path,n)
+        img=Image.open(path)
+        mask=brush_stroke_mask(img)
+        mask.save(os.path.join(save_path,n))
+
+#generate_celeba_inpainting_test()

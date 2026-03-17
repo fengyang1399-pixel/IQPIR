@@ -1,7 +1,7 @@
 # general settings
 name: VQGAN-512-ds32-nearest-stage1
 model_type: VQGANModel
-num_gpu: 1
+num_gpu: 3
 manual_seed: 0
 
 # dataset and data loader settings
@@ -9,12 +9,12 @@ datasets:
   train:
     name: FFHQ
     type: FFHQBlindDataset
-    dataroot_gt: /data/ffhq512_7w/
+    dataroot_gt: /data1/hp/FFHQ512/images512x512
     filename_tmpl: '{}'
     io_backend:
       type: disk
 
-    init_quality_path: ffhq512_all7w_musiq_gfiqa.csv
+    init_quality_path: ffhq_ensemble.csv
     in_size: 512
     gt_size: 512
     mean: [0.5, 0.5, 0.5]
@@ -24,7 +24,7 @@ datasets:
 
     # data loader
     num_worker_per_gpu: 2
-    batch_size_per_gpu: 1
+    batch_size_per_gpu: 4
     dataset_enlarge_ratio: 100
 
     prefetch_mode: cpu
@@ -47,10 +47,11 @@ network_g:
   img_size: 512
   nf: 64
   ch_mult: [1, 2, 2, 4, 4, 8]
-  quantizer: 'dual_codebook'
+  quantizer: 'nearest'
   codebook_size: 1024
-  aesthetic_weight: 1.0
-  aesthetic_threshold: 0.75
+  aesthetic_weight: 0.8
+  aesthetic_threshold: 0.70
+  quantize_fusion: None
 network_d:
   type: VQGANDiscriminator
   nc: 3
@@ -124,7 +125,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: !!float 1e4
+  save_checkpoint_freq: !!float 1e5
   use_tb_logger: true
   wandb:
     project: ~

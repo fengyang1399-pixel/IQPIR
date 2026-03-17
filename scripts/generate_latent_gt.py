@@ -7,7 +7,7 @@ import cv2
 import torch
 from torchvision.transforms.functional import normalize
 from basicsr.utils import imwrite, img2tensor, tensor2img
-
+from tqdm import tqdm
 from basicsr.utils.registry import ARCH_REGISTRY
 
 if __name__ == '__main__':
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     vqgan = ARCH_REGISTRY.get('VQAutoEncoder')(512, 64, [1, 2, 2, 4, 4, 8], 'dual_codebook',
                                                 codebook_size=codebook_size).to(device)
     checkpoint = torch.load(ckpt_path)['params_ema']
-    pdb.set_trace()     
+    #pdb.set_trace()     
     vqgan.load_state_dict(checkpoint)
     vqgan.eval()
 
@@ -44,11 +44,11 @@ if __name__ == '__main__':
     
     #for i in ['orig', 'hflip']:
     #for i in ['hflip']:
-    name=[f'25_16w_common_latent_gt_code{codebook_size}.pth',f'25_16w_HQplus_latent_gt_code{codebook_size}.pth']
+    name=[f'42_20w_common_latent_gt_code{codebook_size}.pth',f'42_20w_HQplus_latent_gt_code{codebook_size}.pth']
     for k in range(2):
         for i in ['orig', 'hflip']:
         #for i in ['orig']:
-            for img_path in sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g'))):
+            for img_path in tqdm(sorted(glob.glob(os.path.join(test_path, '*.[jp][pn]g')))):
                 img_name = os.path.basename(img_path)
                 img = cv2.imread(img_path)
                 if i == 'hflip':
@@ -69,7 +69,7 @@ if __name__ == '__main__':
                 min_encoding_indices = log['min_encoding_indices']
                 min_encoding_indices = min_encoding_indices.view(size_latent,size_latent)
                 latent[i][img_name[:-4]] = min_encoding_indices.cpu().numpy()
-                print(img_name, latent[i][img_name[:-4]].shape)
+                #print(img_name, latent[i][img_name[:-4]].shape)
 
         latent_save_path = os.path.join(save_root, name[k])
         torch.save(latent, latent_save_path)

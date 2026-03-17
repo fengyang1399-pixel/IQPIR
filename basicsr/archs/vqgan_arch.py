@@ -4,6 +4,7 @@ https://github.com/samb-t/unleashing-transformers/blob/master/models/vqgan.py
 
 '''
 import pdb
+from einops import einsum, rearrange
 import numpy as np
 import torch
 import torch.nn as nn
@@ -34,6 +35,7 @@ class VectorQuantizer(nn.Module):
     def forward(self, z):
         # reshape z -> (batch, height, width, channel) and flatten
         z = z.permute(0, 2, 3, 1).contiguous()
+        b,h,w,c=z.shape
         z_flattened = z.view(-1, self.emb_dim)
 
         # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
@@ -53,7 +55,7 @@ class VectorQuantizer(nn.Module):
         # get quantized latent vectors
         z_q = torch.matmul(min_encodings, self.embedding.weight).view(z.shape)
         # compute loss for embedding
-        loss = torch.mean((z_q.detach()-z)**2) + self.beta * torch.mean((z_q - z.detach()) ** 2)
+        loss = torch.mean((z_q.detach().view(b,-1)-z.view(b,-1))**2,dim=-1) + self.beta * torch.mean((z_q.view(b,-1) - z.detach().view(b,-1)) ** 2,dim=-1)
         # preserve gradients
         z_q = z + (z_q - z).detach()
 
@@ -322,12 +324,98 @@ class Generator(nn.Module):
             x = block(x)
             
         return x
+def Normalize(in_channels):
+    return torch.nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True)
+class MultiHeadAttnBlock(nn.Module):
+    def __init__(self, in_channels, head_size=1):
+        super().__init__()
+        self.in_channels = in_channels
+        self.head_size = head_size
+        self.att_size = in_channels // head_size
+        assert(in_channels % head_size == 0), 'The size of head should be divided by the number of channels.'
 
-  
+        self.norm1 = Normalize(in_channels)
+        self.norm2 = Normalize(in_channels)
+
+        self.q = torch.nn.Conv2d(in_channels,
+                                 in_channels,
+                                 kernel_size=1,
+                                 stride=1,
+                                 padding=0)
+        self.k = torch.nn.Conv2d(in_channels,
+                                 in_channels,
+                                 kernel_size=1,
+                                 stride=1,
+                                 padding=0)
+        self.v = torch.nn.Conv2d(in_channels,
+                                 in_channels,
+                                 kernel_size=1,
+                                 stride=1,
+                                 padding=0)
+        self.proj_out = torch.nn.Conv2d(in_channels,
+                                        in_channels,
+                                        kernel_size=1,
+                                        stride=1,
+                                        padding=0)
+        self.num = 0
+
+    def forward(self, x, y=None):
+        
+        # import pdb
+        # pdb.set_trace()
+        # x = HQ
+        # y = LQ
+        
+        h_ = x
+        h_ = self.norm1(h_)
+        if y is None or (y == 0).all():
+            y = h_
+        else:
+            y = self.norm2(y)
+
+        # q = self.q(y)
+        # k = self.k(h_)
+        # v = self.v(h_)
+        q = self.q(h_)
+        k = self.k(y)
+        v = self.v(y)
+
+        # compute attention
+        b,c,h,w = q.shape
+        q = q.reshape(b, self.head_size, self.att_size ,h*w) 
+        q = q.permute(0, 3, 1, 2) # b, hw, head, att
+
+        k = k.reshape(b, self.head_size, self.att_size ,h*w) 
+        k = k.permute(0, 3, 1, 2)
+
+        v = v.reshape(b, self.head_size, self.att_size ,h*w) 
+        v = v.permute(0, 3, 1, 2)
+
+
+        q = q.transpose(1, 2)
+        v = v.transpose(1, 2)
+        k = k.transpose(1, 2).transpose(2,3)
+
+        scale = int(self.att_size)**(-0.5)
+        q.mul_(scale)
+        w_ = torch.matmul(q, k)
+        w_ = F.softmax(w_, dim=3)
+
+        w_ = w_.matmul(v)
+
+        w_ = w_.transpose(1, 2).contiguous() # [b, h*w, head, att]
+        w_ = w_.view(b, h, w, -1)
+        w_ = w_.permute(0, 3, 1, 2)
+
+        w_ = self.proj_out(w_)
+
+        return x+w_
+
+
 @ARCH_REGISTRY.register()
 class VQAutoEncoder(nn.Module):
     def __init__(self, img_size, nf, ch_mult, quantizer="nearest", res_blocks=2, attn_resolutions=[16], codebook_size=1024, emb_dim=256,
-                beta=0.25, gumbel_straight_through=False, gumbel_kl_weight=1e-8, model_path=None,aesthetic_threshold=None,aesthetic_weight=None):
+                beta=0.25, gumbel_straight_through=False, gumbel_kl_weight=1e-8, model_path=None,aesthetic_threshold=None,aesthetic_weight=None,quantize_fusion='add'):
         super().__init__()
         logger = get_root_logger()
         self.in_channels = 3 
@@ -339,6 +427,7 @@ class VQAutoEncoder(nn.Module):
         self.resolution = img_size
         self.attn_resolutions = attn_resolutions
         self.quantizer_type = quantizer
+        self.quantize_fusion=quantize_fusion
         self.encoder = Encoder(
             self.in_channels,
             self.nf,
@@ -353,13 +442,15 @@ class VQAutoEncoder(nn.Module):
             self.beta = beta #0.25
             self.quantize = VectorQuantizer(self.codebook_size, self.embed_dim, self.beta)
         elif self.quantizer_type == 'dual_codebook':
-            print('===================== dual_codebook ======================')
-            #assert aesthetic_threshold is not None and aesthetic_weight is not None
+            print(f'========= dual_codebook =====aesthetic_weight={aesthetic_weight}========aesthetic_threshold={aesthetic_threshold}=========')
+            #assert aesthetic_threshold==0.91 and aesthetic_weight==0.5,print(aesthetic_threshold,aesthetic_weight)
             self.beta = beta #0.25
             self.quantize = VectorQuantizer(self.codebook_size, self.embed_dim, self.beta)
             self.aesthetic_weight=aesthetic_weight
             self.aesthetic_threshold=aesthetic_threshold
-            self.quantize_aesthetic = VectorQuantizer(self.codebook_size, self.embed_dim, self.beta)
+            self.quantize_aesthetic = VectorQuantizer(1024, self.embed_dim, self.beta)
+            if self.quantize_fusion=='attention':
+                self.attention=MultiHeadAttnBlock(in_channels=256,head_size=8)
         elif self.quantizer_type == "gumbel":
             print('===================== gumbel ======================')
             self.gumbel_num_hiddens = emb_dim
@@ -400,6 +491,7 @@ class VQAutoEncoder(nn.Module):
 
     def forward(self, x,finetune_codebook=False,aesthetic_score=None):
         x = self.encoder(x)
+        codebook_loss_aesthetic=None
         if(self.quantizer_type == "None"):
             quant, codebook_loss, quant_stats = x,torch.tensor(0.0,device=x.device),None
         elif self.quantizer_type== 'dual_codebook':
@@ -407,22 +499,31 @@ class VQAutoEncoder(nn.Module):
             assert aesthetic_score is not None
             quant, codebook_loss, quant_stats = self.quantize(x)
             #pdb.set_trace()
-            if(aesthetic_score>self.aesthetic_threshold):
-                
-                quant_aesthetic, codebook_loss_aesthetic, quant_stats_aesthetic = self.quantize_aesthetic(x)
-                self.c1_mean.append(quant.detach().cpu().mean())
-                self.c2_mean.append(quant_aesthetic.detach().cpu().mean())
-            else:
-                quant_aesthetic, codebook_loss_aesthetic, quant_stats_aesthetic =0,0,0
+            quant_aesthetic, codebook_loss_aesthetic, quant_stats_aesthetic = self.quantize_aesthetic(x)
+            codebook_loss_aesthetic[aesthetic_score<=self.aesthetic_threshold]*=0
+            quant_aesthetic[aesthetic_score<=self.aesthetic_threshold]*=0
+            codebook_loss_aesthetic= torch.mean(codebook_loss_aesthetic)
+            # if(aesthetic_score>self.aesthetic_threshold):
+            #     quant_aesthetic, codebook_loss_aesthetic, quant_stats_aesthetic = self.quantize_aesthetic(x)
+            #     # self.c1_mean.append(quant.detach().cpu().mean())
+            #     # self.c2_mean.append(quant_aesthetic.detach().cpu().mean())
+            # else:
+            #     quant_aesthetic, codebook_loss_aesthetic, quant_stats_aesthetic =torch.tensor(0),0,0
+            #     quant_aesthetic, codebook_loss_aesthetic, quant_stats_aesthetic = self.quantize_aesthetic(x)
             #pdb.set_trace()
-            quant+=self.aesthetic_weight*quant_aesthetic
-            codebook_loss+=self.aesthetic_weight*codebook_loss_aesthetic
+            if self.quantize_fusion=='add':
+                #quant+=self.aesthetic_weight*quant_aesthetic
+                quant=quant+self.aesthetic_weight*quant_aesthetic #this line is to test aesthetic codebook only 
+            elif self.quantize_fusion=='attention':
+                quant=self.attention(quant,quant_aesthetic)
+            #codebook_loss+=self.aesthetic_weight*codebook_loss_aesthetic
             #quant_stats+=self.aesthetic_weight*quant_stats_aesthetic
         else:
             quant, codebook_loss, quant_stats = self.quantize(x)
             quant_stats_aesthetic=None
+            codebook_loss_aesthetic=torch.tensor(0.,device=x.device)
         x = self.generator(quant)
-        return x, codebook_loss, quant_stats,quant_stats_aesthetic
+        return x, torch.mean(codebook_loss),torch.mean(codebook_loss_aesthetic), quant_stats,quant_stats_aesthetic
 
 
 

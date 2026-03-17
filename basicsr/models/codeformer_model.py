@@ -24,7 +24,11 @@ class CodeFormerModel(SRModel):
             self.idx_gt = self.idx_gt.view(self.b, -1)
         else:
             self.idx_gt = None
-
+        if 'latent_gt_aesthetic' in data:
+            self.idx_gt_aesthetic = data['latent_gt_aesthetic'].to(self.device)
+            self.idx_gt_aesthetic = self.idx_gt_aesthetic.view(self.b, -1)
+        else:
+            self.idx_gt_aesthetic=None
     def init_training_settings(self):
         logger = get_root_logger()
         train_opt = self.opt['train']
@@ -143,6 +147,7 @@ class CodeFormerModel(SRModel):
         self.optimizer_g.zero_grad()
 
         if self.generate_idx_gt:
+            assert False,"hp:must encode latent first."
             x = self.hq_vqgan_fix.encoder(self.gt)
             output, _, quant_stats = self.hq_vqgan_fix.quantize(x)
             min_encoding_indices = quant_stats['min_encoding_indices']
@@ -156,6 +161,9 @@ class CodeFormerModel(SRModel):
         if self.hq_feat_loss:
             # quant_feats
             quant_feat_gt = self.net_g.module.quantize.get_codebook_feat(self.idx_gt, shape=[self.b,16,16,256])
+            if self.net_g.module.quantizer_type=='dual_codebook':
+                quant_feat_gt2 = self.net_g.module.quantize_aesthetic.get_codebook_feat(self.idx_gt_aesthetic, shape=[self.b,16,16,256])
+                quant_feat_gt+=quant_feat_gt2*self.net_g.module.aesthetic_weight
 
         l_g_total = 0
         loss_dict = OrderedDict()
@@ -169,6 +177,12 @@ class CodeFormerModel(SRModel):
             # cross_entropy_loss
             if self.cross_entropy_loss:
                 # b(hw)n -> bn(hw)
+                if self.net_g.module.quantizer_type=='dual_codebook':
+                    logits_aesthetic=logits[:,:,:,0].squeeze()
+                    logits=logits[:,:,:,1].squeeze()
+                    cross_entropy_loss2 = F.cross_entropy(logits_aesthetic.permute(0, 2, 1), self.idx_gt_aesthetic) * self.entropy_loss_weight
+                    l_g_total += cross_entropy_loss2
+                    loss_dict['cross_entropy_loss_aesthetic_codebook'] = cross_entropy_loss2
                 cross_entropy_loss = F.cross_entropy(logits.permute(0, 2, 1), self.idx_gt) * self.entropy_loss_weight
                 l_g_total += cross_entropy_loss
                 loss_dict['cross_entropy_loss'] = cross_entropy_loss

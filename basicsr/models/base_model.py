@@ -309,6 +309,7 @@ class BaseModel():
                 for name, value in loss_dict.items():
                     keys.append(name)
                     losses.append(value)
+#                print(self.opt['rank'],keys,losses)
                 losses = torch.stack(losses, 0)
                 torch.distributed.reduce(losses, dst=0)
                 if self.opt['rank'] == 0:

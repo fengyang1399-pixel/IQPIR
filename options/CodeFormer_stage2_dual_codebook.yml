@@ -1,7 +1,7 @@
 # general settings
 name: CodeFormer_stage2
 model_type: CodeFormerIdxModel
-num_gpu: 1
+num_gpu: 7
 manual_seed: 0
 
 # dataset and data loader settings
@@ -9,12 +9,12 @@ datasets:
   train:
     name: FFHQ
     type: FFHQBlindDataset
-    dataroot_gt: /data/ffhq512_7w/
+    dataroot_gt:   /data1/hp/FFHQ512/images512x512 #/data1/hp/celeba_512_validation
     filename_tmpl: '{}'
     io_backend:
       type: disk
     
-    init_quality_path: all_scores.csv
+    init_quality_path: /home/hp/work/CodeFormer_aesthetic/basicsr/IQA/pyiqa/IQA-PyTorch/result/cvpr2025/ensemble.csv
     normalize_quality: false
     in_size: 512
     gt_size: 512
@@ -34,9 +34,9 @@ datasets:
     noise_range: [0, 20]
     jpeg_range: [30, 80]
 
-    #latent_gt_path: ~ # without pre-calculated latent code
-    latent_gt_path: './weights/CodeFormer_aesthetic/150w_common_latent_gt_code1024.pth'
-    latent_gt_path_aesthetic: './weights/CodeFormer_aesthetic/150w_HQplus_latent_gt_code1024.pth'
+    latent_gt_path: ~ # without pre-calculated latent code
+    latent_gt_path: '/home/hp/work/CodeFormer_aesthetic/weights/CodeFormer_aesthetic/42_20w_common_latent_gt_code1024.pth'
+    latent_gt_path_aesthetic: '/home/hp/work/CodeFormer_aesthetic/weights/CodeFormer_aesthetic/42_20w_HQplus_latent_gt_code1024.pth'
 
     # data loader
     num_worker_per_gpu: 2
@@ -63,12 +63,12 @@ network_g:
   n_layers: 9
   codebook_size: 1024
   connect_list: ['32', '64', '128', '256']
-  fix_modules: ['quantize','generator']
-  vqgan_path: '/data/weight/codeformer_aesthetic/1_0.75/net_g_1500000.pth' # pretrained VQGAN 
+  fix_modules: ['generator']  #['quantize','generator']
+  vqgan_path: '/home/hp/work/CodeFormer_aesthetic/experiments/20241028_073143_VQGAN-512-ds32-nearest-stage1/models/net_g_200000.pth' # pretrained VQGAN 
   num_class: 10
-  bins_list: [20,20,20,20]
+  score_embedding: None
   quantizer_type: 'dual_codebook'
-  aesthetic_weight: 1.0
+  aesthetic_weight: 0.8
 # network_vqgan: # this config is needed if no pre-calculated latent
 #   type: VQAutoEncoder
 #   img_size: 512
@@ -93,7 +93,8 @@ train:
   cross_entropy_loss: true
   entropy_loss_weight: 0.5
   fidelity_weight: 0
-  quality_loss: true
+  quality_loss: false
+  quality_loss_weight: 0.0
 
   optim_g:
     type: Adam
@@ -112,7 +113,7 @@ train:
   #   restart_weights: [1]
   #   eta_min: !!float 2e-5 # no lr reduce in official vqgan code
 
-  total_iter: 500000
+  total_iter: 250000
 
   warmup_iter: -1  # no warm up
   ema_decay: 0.995
@@ -138,7 +139,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: !!float 1e4
+  save_checkpoint_freq: !!float 5e4
   use_tb_logger: true
   wandb:
     project: ~
