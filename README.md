@@ -27,63 +27,43 @@ Contact: fengyang.xiao@duke.edu / chunming.he@duke.edu
 
 ### 1. Prerequisites
 
-> Note that IQPIR is tested on Ubuntu with the following environments.
-
-* Create a virtual environment: `conda create -n IQPIR python=3.9`
-* Activate: `conda activate IQPIR`
-* Install PyTorch: `pip install torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu118`
-* Install dependencies: `pip install -r requirements.txt`
-* Install basicsr: `cd basicsr && python setup.py develop && cd ..`
+Coming soon.
 
 ### 2. Pretrained Models
 
-Coming soon. Models will be released on Google Drive.
-
-| Model | Description | Download |
-|-------|-------------|----------|
-| vqgan_code1024.pth | Stage I: VQGAN + Dual Codebook | Coming Soon |
-| IQPIR_stage2.pth | Stage II: Quality-conditioned Transformer | Coming Soon |
-| IQPIR_stage3.pth | Stage III: Full model with quality optimization | Coming Soon |
-
-Place downloaded weights under `weights/`.
+Coming soon.
 
 ### 3. Inference
 
-**Blind Face Restoration (whole images):**
+**Blind Face Restoration:**
 ```bash
 python inference_codeformer.py \
-    --input_path inputs/whole_imgs \
-    --output_path results/restored \
-    --fidelity_weight 0.5 \
-    --upscale 2 \
-    --face_upsample
+    -i [input_path] \
+    -o [output_path] \
+    -w 0.5 \
+    -score 0.9 \
+    --has_aligned \
+    -qt dual_codebook \
+    -ckpt [path_to_checkpoint]
 ```
 
 **Key arguments:**
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--fidelity_weight` | 0.5 | 0.0 = quality, 1.0 = fidelity |
-| `--upscale` | 2 | Background upscale factor |
-| `--face_upsample` | — | Enable face super-resolution |
+| Argument | Description |
+|----------|-------------|
+| `-w` | Fidelity weight: 0.0 = quality, 1.0 = fidelity |
+| `-score` | IQA condition score: set to 0.9 for highest quality output |
+| `-qt` | Codebook type: use `dual_codebook` for IQPIR |
+| `--has_aligned` | Input images are already aligned faces |
+| `-ckpt` | Path to model checkpoint |
 
 ### 4. Training
-```bash
-# Stage I: Dual Codebook Learning
-python basicsr/train.py -opt options/VQGAN_512_ds32_nearest_stage1.yml
 
-# Stage II: Quality-conditioned Transformer
-python basicsr/train.py -opt options/CodeFormer_stage2.yml
-
-# Stage III: Quality Optimization
-python basicsr/train.py -opt options/CodeFormer_stage3.yml
-```
-
-Place FFHQ training data at `datasets/ffhq/ffhq_512/`, or update `dataroot_gt` in the corresponding `.yml` config file.
+Coming soon.
 
 ## 🔍 Results
 
-Quantitative and qualitative results on blind face restoration (LFW-Test, WebPhoto-Test, WIDER-Test), low-light image enhancement (LOL-v1, LOL-v2), underwater image enhancement (UIEB), and backlit image enhancement (BAID). See paper for full details.
+Coming soon.
 
 ## 📎 Citation
 
