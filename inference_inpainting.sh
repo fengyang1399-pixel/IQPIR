@@ -5,4 +5,4 @@
 python inference_inpainting.py \
     --input_path inputs/masked_faces \
     -o results/inpainting \
-    --ckpt weights/IQPIR_inpainting.pth
+    --ckpt weights/[path/to/checkpoint.pth]
