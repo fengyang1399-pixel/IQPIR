@@ -40,7 +40,7 @@ Coming soon.
 python inference_codeformer.py \
     -i [input_path] \
     -o [output_path] \
-    -w 0.5 \
+    -w 0 \
     -score 0.9 \
     --has_aligned \
     -qt dual_codebook \
