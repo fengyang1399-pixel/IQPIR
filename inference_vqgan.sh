@@ -1,5 +1,0 @@
-#python scripts/inference_vqgan.py -i /data/ffhq512_7w -o results/vqgan_rec/codeformer_aesthetic_2/15w/input_ffhq512/2codebook --ckpt_path /data/weight/codeformer_aesthetic/2_0.87/net_g_150000.pth
-#python scripts/inference_vqgan.py -i /data/data/test_data/celeba_512_validation -o /home/ma-user/work/CodeFormer_aesthetic/results/codeformer_aesthetic/vqgan_rec/codeformer_aesthetic_35/150/input_celeba_hq/w_aesthetic --ckpt_path /data/weights/codeformer_aesthetic/35/net_g_150000.pth
-#python scripts/inference_vqgan.py -i /data1/hp/FFHQ512/100images/  -o /data1/hp/results/vqgan_rec/cfsrc_input_ffhq_quantx2 --ckpt_path /home/hp/work/CodeFormer/weights/CodeFormer/vqgan_code1024.pth
-python scripts/inference_vqgan.py -i /data1/hp/celeba_512_validation  -o /data1/hp/results/vqgan_rec/codeformer_aesthetic_42/20w/celebahq/2codebook_aw1 --ckpt_path /data1/hp/ckpts/experiments/20241028_073143_VQGAN-512-ds32-nearest-stage1/models/net_g_200000.pth
-#python scripts/inference_vqgan.py -i /data1/hp/celeba_512_validation  -o /data1/hp/results/vqgan_rec/cfsrc_input_celebahq --ckpt_path /home/hp/work/CodeFormer/weights/CodeFormer/vqgan_code1024.pth
