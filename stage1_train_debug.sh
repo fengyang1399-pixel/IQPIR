@@ -1,1 +1,0 @@
-CUDA_VISIBLE_DEVICES="0,1,2" torchrun --nproc_per_node=3 --master_port=4321 basicsr/train.py -opt options/VQGAN_512_ds32_nearest_stage1.yml --launcher pytorch
