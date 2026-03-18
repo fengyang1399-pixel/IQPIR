@@ -10,7 +10,7 @@ Duke University · Tsinghua University · EPFL
 
 Contact: fengyang.xiao@duke.edu / chunming.he@duke.edu
 
-[[Paper](https://arxiv.org/abs/COMING_SOON)] [[Models & Results](https://drive.google.com/COMING_SOON)]
+[Paper: Coming Soon] [Models & Results: Coming Soon]
 
 > **Abstract:** Real-world image restoration aims to restore high-quality (HQ) images from degraded low-quality (LQ) inputs captured under uncontrolled conditions. Existing methods typically depend on ground-truth (GT) supervision, assuming that GT provides perfect reference quality. However, GT can still contain images with inconsistent perceptual fidelity, causing models to converge to the average quality level of the training data rather than achieving the highest perceptual quality attainable. To address these problems, we propose a novel framework, termed IQPIR, that introduces an Image Quality Prior (IQP), extracted from pretrained No-Reference Image Quality Assessment (NR-IQA) models, to guide the restoration process toward perceptually optimal outputs explicitly. Our approach synergistically integrates IQP with a learned codebook prior through three key mechanisms: (1) a quality-conditioned Transformer, (2) a dual-branch codebook structure, and (3) a discrete representation-based quality optimization strategy. Extensive experiments on real-world image restoration demonstrate that our method not only surpasses cutting-edge methods but also serves as a generalizable quality-guided enhancement strategy for existing methods.
 
